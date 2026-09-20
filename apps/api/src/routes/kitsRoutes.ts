@@ -1,204 +1,200 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import {
-  runPipeline,
-  validateKit,
-  buildSchedule,
-  markEdited,
-  initialMetaFor,
-} from '@prep-kit/core';
-import { GeminiClient } from '@prep-kit/llm';
 import { KitDocument } from '../db/models/KitDocument.js';
-import { assertOwnsKit, ForbiddenError } from './ownership.js';
+import {
+  startKitGeneration,
+  fingerprint,
+  isStaleGeneration,
+  KitInput,
+} from '../services/kitGeneration.js';
 import { asyncHandler } from './asyncHandler.js';
+import { builderRouter } from './builderRoutes.js';
+import { practiceRouter } from './practiceRoutes.js';
 
 export const kitsRouter = Router();
 
+/**
+ * Upper bounds on user input. A job description is text a human pasted;
+ * anything past ~50k characters is not a job description, and letting it
+ * through just means paying to send it to the model.
+ */
 const CreateKitSchema = z.object({
-  jd: z.string().min(1),
-  company_url: z.string().url(),
-  days: z.number().int().positive(),
+  jd: z.string().min(1).max(50_000),
+  company_url: z.string().url().max(2_000),
+  days: z.number().int().min(1).max(90),
 });
 
-function llmClient(): GeminiClient {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
-  return new GeminiClient({ apiKey, model: process.env.GEMINI_MODEL });
+/** The "prepare for more than one role at once" upload (brief Section 2). */
+const BatchSchema = z.object({
+  cases: z.array(CreateKitSchema).min(1).max(20),
+});
+
+function badRequest(res: import('express').Response, error: z.ZodError): void {
+  res.status(400).json({
+    error: {
+      code: 'VALIDATION_FAILED',
+      message: 'Check the job description, company URL and number of days.',
+      details: error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+    },
+  });
 }
 
-// --- create ---
-// Generation is slow/external/failure-prone (brief Section 13), so this
-// stores a "generating" placeholder immediately and updates it once
-// runPipeline resolves, rather than holding the HTTP request open for
-// however long crawling + multiple LLM calls take. The web app polls
-// GET /kits/:id for status until it flips to "ready" or "failed" — this
-// covers "visible progress and clear failure states" without needing
-// websockets for a minimal implementation. Swap for SSE/websockets later
-// if polling proves too chatty.
+/**
+ * Find an existing kit for the same posting.
+ *
+ * Brief Section 10 lists "the same description and company are submitted
+ * twice" as an edge case. Resubmitting is treated as a request for the kit
+ * the user already has, not as an error and not as a reason to spend a
+ * second pipeline run: the existing kit is returned with a flag so the
+ * interface can say so plainly. A previously *failed* kit is excluded —
+ * resubmitting after a failure is a retry, and should genuinely retry.
+ */
+async function findDuplicate(userId: string, input: KitInput) {
+  return KitDocument.findOne({
+    userId,
+    fingerprint: fingerprint(userId, input),
+    status: { $ne: 'failed' },
+  })
+    .select('_id status')
+    .lean();
+}
+
+// --- create one kit ---
 kitsRouter.post(
   '/',
   asyncHandler(async (req, res) => {
     const parsed = CreateKitSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: { code: 'VALIDATION_FAILED', message: parsed.error.message } });
+    if (!parsed.success) return badRequest(res, parsed.error);
+
+    const existing = await findDuplicate(req.userId!, parsed.data);
+    if (existing) {
+      res.status(200).json({
+        id: String(existing._id),
+        status: existing.status,
+        duplicate_of_existing_kit: true,
+      });
       return;
     }
-    const { jd, company_url, days } = parsed.data;
 
-    const doc = await KitDocument.create({
-      userId: req.userId,
-      status: 'generating',
-      kit: null,
-      meta: null,
-    });
-
-    // Fire-and-forget: the response returns immediately with the doc id so
-    // the client can start polling. Errors are caught and recorded on the
-    // document rather than crashing the request handler (which has already
-    // responded by the time this runs).
-    void (async () => {
-      try {
-        const kit = await runPipeline({ jd, companyUrl: company_url, days }, { llm: llmClient() });
-        const { valid, errors } = validateKit(kit);
-        if (!valid) throw new Error(`Generated kit failed validation: ${errors.join('; ')}`);
-
-        const meta = initialMetaFor(
-          kit.questions.map((q) => q.id),
-          kit.flashcards.map((f) => f.id),
-        );
-        await KitDocument.findByIdAndUpdate(doc.id, { status: 'ready', kit, meta });
-      } catch (err) {
-        await KitDocument.findByIdAndUpdate(doc.id, {
-          status: 'failed',
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    })();
-
-    res.status(202).json({ id: doc.id, status: 'generating' });
+    const id = await startKitGeneration(req.userId!, parsed.data);
+    res.status(202).json({ id, status: 'generating', duplicate_of_existing_kit: false });
   }),
 );
 
-// --- list (own kits only) ---
+// --- create several kits from an uploaded file of description/company pairs ---
+kitsRouter.post(
+  '/batch',
+  asyncHandler(async (req, res) => {
+    const parsed = BatchSchema.safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+
+    // Each case is settled independently: one malformed or duplicate entry
+    // in an uploaded file must not cost the user the other nineteen.
+    const results: unknown[] = [];
+    for (const [index, input] of parsed.data.cases.entries()) {
+      try {
+        const existing = await findDuplicate(req.userId!, input);
+        if (existing) {
+          results.push({
+            index,
+            id: String(existing._id),
+            status: existing.status,
+            duplicate_of_existing_kit: true,
+          });
+          continue;
+        }
+        const id = await startKitGeneration(req.userId!, input);
+        results.push({ index, id, status: 'generating', duplicate_of_existing_kit: false });
+      } catch (err) {
+        results.push({
+          index,
+          id: null,
+          status: 'failed',
+          error: err instanceof Error ? err.message : 'Could not start generation for this row.',
+        });
+      }
+    }
+
+    res.status(202).json({ results });
+  }),
+);
+
+// --- list the caller's own kits ---
 kitsRouter.get(
   '/',
   asyncHandler(async (req, res) => {
     const docs = await KitDocument.find({ userId: req.userId })
-      .select('status kit.source createdAt updatedAt')
+      .select('status error kit.source kit.coverage input.days createdAt updatedAt')
+      .sort({ createdAt: -1 })
       .lean();
-    res.json(docs);
+
+    res.json(
+      docs.map((doc) => ({
+        id: String(doc._id),
+        status: isStaleGeneration(doc.status, doc.updatedAt) ? 'failed' : doc.status,
+        error: doc.error ?? null,
+        company: doc.kit?.source?.company ?? null,
+        role: doc.kit?.source?.role ?? null,
+        company_url: doc.kit?.source?.company_url ?? null,
+        days: doc.input?.days ?? null,
+        uncovered_count: doc.kit?.coverage?.uncovered_requirement_ids?.length ?? 0,
+        created_at: doc.createdAt,
+        updated_at: doc.updatedAt,
+      })),
+    );
   }),
 );
 
-// --- get one ---
+// --- read one kit (this is also the generation-progress poll target) ---
 kitsRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const doc = await KitDocument.findById(req.params.id);
-    if (!doc) {
+    const doc = await KitDocument.findById(req.params.id).catch(() => null);
+    // 404 rather than 403 on someone else's kit — see loadKit.ts.
+    if (!doc || doc.userId.toString() !== req.userId) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Kit not found.' } });
       return;
     }
-    try {
-      assertOwnsKit(doc.userId.toString(), req.userId!);
-    } catch (err) {
-      if (err instanceof ForbiddenError) {
-        res.status(403).json({ error: { code: 'FORBIDDEN', message: err.message } });
-        return;
-      }
-      throw err;
+
+    // Nothing is still working on a run this old; report it honestly
+    // instead of leaving the interface polling a spinner forever.
+    if (isStaleGeneration(doc.status, doc.updatedAt)) {
+      doc.status = 'failed';
+      doc.error =
+        'Generation stopped unexpectedly and did not finish. Create the kit again to retry.';
+      await doc.save();
     }
-    res.json(doc);
+
+    res.json({
+      id: doc.id,
+      status: doc.status,
+      error: doc.error ?? null,
+      kit: doc.kit,
+      meta: doc.meta,
+      practice: doc.practice ?? {},
+      input: doc.input,
+      created_at: doc.createdAt,
+      updated_at: doc.updatedAt,
+    });
   }),
 );
 
-// --- inline edit: question ---
-const EditQuestionSchema = z.object({
-  prompt: z.string().optional(),
-  answer_outline: z.string().optional(),
-  difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
-  category: z.enum(['technical', 'behavioural', 'system-design', 'company-fit']).optional(),
-});
-
-kitsRouter.patch(
-  '/:id/questions/:qid',
+// --- delete a whole kit ---
+kitsRouter.delete(
+  '/:id',
   asyncHandler(async (req, res) => {
-    const doc = await requireOwnedKit(req, res);
-    if (!doc) return;
-
-    const parsed = EditQuestionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: { code: 'VALIDATION_FAILED', message: parsed.error.message } });
-      return;
-    }
-
-    const question = doc.kit!.questions.find((q: { id: string }) => q.id === req.params.qid);
-    if (!question) {
-      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Question not found in this kit.' } });
-      return;
-    }
-    Object.assign(question, parsed.data);
-    doc.meta = markEdited(doc.meta!, 'questions', String(req.params.qid));
-    doc.markModified('kit');
-    doc.markModified('meta');
-    await doc.save();
-    res.json(doc);
-  }),
-);
-
-// --- regenerate a question category, preserving edits (brief Section 6) ---
-kitsRouter.post(
-  '/:id/regenerate/questions/:category',
-  asyncHandler(async (req, res) => {
-    const doc = await requireOwnedKit(req, res);
-    if (!doc) return;
-
-    // TODO: once generateQuestionsForRequirement is implemented, call it
-    // here for each requirement relevant to :category, then merge with
-    // mergeRegeneratedQuestions(doc.kit.questions, doc.meta, category, fresh)
-    // and save. Left unimplemented until the LLM generation module is
-    // wired, so this route currently returns 501 rather than silently
-    // no-op-ing.
-    res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'Question regeneration pending LLM wiring.' } });
-  }),
-);
-
-// --- regenerate the schedule (deterministic, always available) ---
-kitsRouter.post(
-  '/:id/regenerate/schedule',
-  asyncHandler(async (req, res) => {
-    const doc = await requireOwnedKit(req, res);
-    if (!doc) return;
-
-    doc.kit!.schedule = buildSchedule(
-      doc.kit!.role.requirements,
-      doc.kit!.questions,
-      doc.kit!.schedule.days_available,
+    const result = await KitDocument.deleteOne({ _id: req.params.id, userId: req.userId }).catch(
+      () => ({ deletedCount: 0 }),
     );
-    doc.markModified('kit');
-    await doc.save();
-    res.json(doc);
+    if (result.deletedCount === 0) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Kit not found.' } });
+      return;
+    }
+    res.status(204).end();
   }),
 );
 
-async function requireOwnedKit(req: import('express').Request, res: import('express').Response) {
-  const doc = await KitDocument.findById(req.params.id);
-  if (!doc) {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Kit not found.' } });
-    return null;
-  }
-  try {
-    assertOwnsKit(doc.userId.toString(), req.userId!);
-  } catch (err) {
-    if (err instanceof ForbiddenError) {
-      res.status(403).json({ error: { code: 'FORBIDDEN', message: err.message } });
-      return null;
-    }
-    throw err;
-  }
-  if (doc.status !== 'ready') {
-    res.status(409).json({ error: { code: 'KIT_NOT_READY', message: `Kit status is "${doc.status}".` } });
-    return null;
-  }
-  return doc;
-}
+// Builder and practice routes mount under the same /kits/:id prefix so
+// they inherit the auth middleware and the shared ownership guard.
+kitsRouter.use('/:id', builderRouter);
+kitsRouter.use('/:id', practiceRouter);

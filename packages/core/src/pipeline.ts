@@ -10,6 +10,7 @@ import {
 } from './generation/generateQuestions.js';
 import { findUncoveredMustHaveIds } from './coverage/checkCoverage.js';
 import { buildSchedule } from './schedule/buildSchedule.js';
+import { summarizeCompany } from './generation/summarizeCompany.js';
 import { validateKit } from './validation/validateKit.js';
 
 export interface PipelineInput {
@@ -77,7 +78,16 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
   }
 
   const companyName = guessCompanyName(input.companyUrl, crawlResult);
-  const companyBriefSummary = summarizeCompanyFromPages(crawlResult);
+
+  // 2b. Company brief — an LLM summarisation of what was actually
+  // crawled, or an explicit "nothing found" brief when the crawl came back
+  // empty. summarizeCompany never throws, so an unreachable company site
+  // still yields a kit (brief Section 10).
+  const companyBrief = await summarizeCompany(
+    { companyName, pages: crawlResult.pagesUsed },
+    llm,
+  );
+  const companyBriefSummary = companyBrief.summary;
 
   // 3. Research — best-effort, degrades to null honestly.
   let discussion: InterviewDiscussionFinding | null = null;
@@ -143,11 +153,7 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
       researched_at: researchedAt,
       pages_used: crawlResult.pagesUsed.map((p) => p.url),
     },
-    company_brief: {
-      summary: companyBriefSummary || 'No public company information could be found.',
-      what_they_do: companyBriefSummary || '',
-      sources: crawlResult.pagesUsed.map((p) => p.url),
-    },
+    company_brief: companyBrief,
     role: { title, seniority, responsibilities, requirements },
     questions,
     flashcards,
@@ -180,10 +186,4 @@ function extractTitleFromPages(crawl: CrawlResult): string | null {
   if (!homepage) return null;
   const firstLine = homepage.text.split('\n').find((l) => l.trim().length > 0);
   return firstLine ? firstLine.trim().slice(0, 80) : null;
-}
-
-function summarizeCompanyFromPages(crawl: CrawlResult): string {
-  const homepage = crawl.pagesUsed[0];
-  if (!homepage || !homepage.text) return '';
-  return homepage.text.slice(0, 500);
 }

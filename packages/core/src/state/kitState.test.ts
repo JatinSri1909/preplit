@@ -7,6 +7,8 @@ import {
   mergeRegeneratedFlashcards,
   mergeRegeneratedBrief,
   resetIdCounterForTests,
+  nextItemId,
+  forgetItem,
 } from './kitState.js';
 import { CompanyBrief, Flashcard, Question } from '../types/kit.js';
 
@@ -152,5 +154,40 @@ describe('mergeRegeneratedBrief', () => {
     };
     const result = mergeRegeneratedBrief(existing, meta, fresh);
     expect(result.brief.sources).toEqual(fresh.sources);
+  });
+});
+
+describe('nextItemId', () => {
+  it('mints the next id above the highest existing numeric suffix', () => {
+    expect(nextItemId('q', ['q1', 'q2', 'q3'])).toBe('q4');
+    expect(nextItemId('f', ['f1', 'f7', 'f3'])).toBe('f8'); // gaps do not get reused
+  });
+
+  it('starts at 1 for an empty kit', () => {
+    expect(nextItemId('q', [])).toBe('q1');
+  });
+
+  it('ignores ids of a different prefix or a non-numeric suffix', () => {
+    expect(nextItemId('q', ['f9', 'qabc', 'q2'])).toBe('q3');
+  });
+
+  it('is deterministic — the same kit state always yields the same next id', () => {
+    expect(nextItemId('q', ['q1', 'q2'])).toBe(nextItemId('q', ['q1', 'q2']));
+  });
+});
+
+describe('forgetItem', () => {
+  it('removes only the deleted item\'s provenance entry', () => {
+    const meta = initialMetaFor(['q1', 'q2'], ['f1']);
+    const after = forgetItem(meta, 'questions', 'q1');
+    expect(after.questions.q1).toBeUndefined();
+    expect(after.questions.q2).toBeDefined();
+    expect(after.flashcards.f1).toBeDefined();
+  });
+
+  it('does not mutate the meta it was given', () => {
+    const meta = initialMetaFor(['q1'], []);
+    forgetItem(meta, 'questions', 'q1');
+    expect(meta.questions.q1).toBeDefined();
   });
 });

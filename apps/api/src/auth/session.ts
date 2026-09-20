@@ -11,13 +11,21 @@ import type { Request, Response, NextFunction } from 'express';
 export function sessionMiddleware() {
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw new Error('SESSION_SECRET is not set. See .env.example.');
+  const isProduction = process.env.NODE_ENV === 'production';
   return cookieSession({
     name: 'session',
     secret,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // Deployed, the web app (Vercel) and the API (Render/Fly) sit on
+    // different registrable domains, so every authenticated request from
+    // the browser is cross-site. `lax` would silently drop the session
+    // cookie on those requests and every protected route would 401.
+    // `none` is what actually works there, and it requires `secure`.
+    // Locally both run on localhost, so `lax` is correct and lets the
+    // app work over plain http.
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
   });
 }
 

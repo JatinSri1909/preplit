@@ -15,7 +15,14 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
-import 'dotenv/config';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+dotenv.config();
+if (existsSync(path.resolve(process.cwd(), '../.env'))) {
+  dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+}
 import {
   BatchCase,
   BatchInputSchema,

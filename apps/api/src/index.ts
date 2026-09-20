@@ -1,4 +1,11 @@
-import 'dotenv/config';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+dotenv.config();
+if (existsSync(path.resolve(process.cwd(), '../../.env'))) {
+  dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+}
 import express from 'express';
 import cors from 'cors';
 import { connectDb } from './db/connect.js';

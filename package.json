@@ -10,8 +10,9 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run dev --workspace=apps/api",
-    "build": "npm run build --workspace=packages/llm && npm run build --workspace=packages/core && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
-    "evaluate": "tsx cli/evaluate.ts",
+    "build:packages": "npm run build --workspace=packages/llm && npm run build --workspace=packages/core",
+    "build": "npm run build:packages && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "evaluate": "npm run build:packages --silent && tsx cli/evaluate.ts",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx"
   },

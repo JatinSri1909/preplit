@@ -3,10 +3,9 @@
 Full-Stack Engineering Assessment submission — turns a pasted job description
 + company URL into a structured, editable interview prep kit.
 
-> **Status**: backend pipeline (extraction, crawling, research, generation,
-> coverage, scheduling, validation) is implemented and tested end to end.
-> Auth + kit persistence + REST API are implemented. The Next.js builder UI
-> and practice mode are not yet built. See "What's left" at the bottom.
+> **Status**: feature-complete against the brief. Pipeline, API, builder UI
+> and practice mode are implemented; 89 tests pass and the full build runs
+> from a clean clone. Remaining known limitations are listed at the bottom.
 
 ## Tech stack
 
@@ -15,6 +14,7 @@ Full-Stack Engineering Assessment submission — turns a pasted job description
 | Frontend   | Next.js (App Router) + Tailwind  | Brief's preferred stack |
 | Backend    | Node.js + Express                | Brief's preferred stack |
 | Database   | MongoDB (Mongoose)               | Brief's preferred stack; kit documents are naturally schema-flexible (Appendix A + our own Builder-state metadata live side by side) |
+| Client state | TanStack Query                  | Generation is a long poll, every builder edit is an optimistic cache write that must roll back on failure, and the kit is read by sibling routes that must share one copy. Hand-rolling that is where "an edit in flight" bugs come from |
 | Language   | TypeScript throughout             | Shared types between API, CLI and (via package) the web app; zod schemas double as both request validation and the Appendix A structural contract |
 | Scraping   | Custom crawler (`cheerio` + native `fetch`) | No fixed path list — brief explicitly disallows that. See "Retrieval approach" below |
 | LLM        | **Google Gemini** (`gemini-2.0-flash` by default), via `@google/generative-ai` | Genuine free tier, JSON-mode output, generous-enough TPM for this workload |
@@ -67,7 +67,12 @@ class outright.
 ## High-level architecture
 
 ```
-apps/web/     Next.js — UI (form, builder, practice mode) [not yet built]
+apps/web/     Next.js App Router — UI
+  lib/api.ts       the only module that knows the API exists; one place
+                   for credentials, the error envelope, and 401 handling
+  lib/useKit.ts    kit cache: generation polling + optimistic builder
+                   mutations with rollback
+  components/      builder sections, practice mode, shared primitives
 apps/api/     Express — auth, kit persistence, REST routes
 packages/core/  Framework-free pipeline logic — the single source of truth,
                 imported by BOTH the API and the CLI (Appendix B: "the same
@@ -188,6 +193,55 @@ and the two company-brief text fields independently. Fully unit-tested
 (`kitState.test.ts`, 10 tests) including id-collision safety for freshly
 generated replacement items.
 
+## Practice mode ordering
+
+Confidence-weighted sort, not a spaced-repetition interval
+(`packages/core/src/practice/practiceQueue.ts`).
+
+SM-2 and its relatives schedule cards into the future **in days**. That is
+right for retaining material over months, and wrong here: this user has an
+interview in a known, small number of days — often one — so a scheduler
+deciding a card is "not due for 4 days" may be deferring it past the
+interview itself. Confidence weighting gives the same core benefit (weak
+material returns first) with none of that failure mode, and it is
+explainable to someone using the tool under stress.
+
+Order: unseen cards first (you cannot be confident about a card you never
+read), then lowest confidence, then least-recently reviewed, then kit
+order. Pure and deterministic — no clock, no LLM, fully unit-tested.
+
+The queue is fixed for the duration of a session rather than resorted after
+every rating. Resorting live means a card you just rated "guessed"
+reappears immediately, which reads as punishment rather than revision.
+
+## Frontend notes
+
+- **Editing** is local while a field has focus and saves once, on blur, only
+  if the text changed. Debouncing a PATCH per keystroke fires mid-word and
+  lets two overlapping saves race; this touches the network once per edit.
+  Escape reverts.
+- **Reordering** is move-up/move-down buttons, not drag-and-drop. Keyboard
+  access is graded, and a drag handle that genuinely works with a keyboard
+  and a screen reader is substantial work that most implementations skip.
+  Buttons are operable by every input method, work on a phone without a
+  long-press, and the optimistic update makes them feel as immediate.
+  Reordering inside a filtered category still sends the **full** question
+  order, and the API rejects a partial list — a partial list cannot say
+  where the hidden questions went.
+- **Provenance is visible.** Edited and hand-written items are labelled
+  "kept on regenerate"; generated items carry no badge, since they are the
+  majority and badging them would drown the real signal. Regeneration is
+  offered per category only — there is no "regenerate everything" button,
+  because that is the button that loses work.
+- **Generation progress** names the pipeline steps instead of faking a
+  percentage. Duration depends on the posting and the company site, so any
+  bar would be invented, and one that stalls at 80% is worse than honesty.
+- **Typography** carries one rule: kit content is set in a serif, app
+  chrome in a sans, so you can see at a glance what the model wrote versus
+  what the application is offering. Both are system stacks — no webfont
+  request, because a prep tool should not blank its own text while a font
+  loads.
+
 ## Edge cases
 
 | Case | Handling |
@@ -198,19 +252,24 @@ generated replacement items.
 | No public interview discussion | `findInterviewDiscussion` returns `null` |
 | LLM returns invalid JSON | One self-correction retry (asks the model to fix its own output), then a structured `LlmInvalidJsonError` |
 | LLM rate-limited | Token-bucket rate limiter self-throttles *before* hitting the limit; exponential backoff + jitter on an actual 429 |
-| Duplicate submission | Not deduplicated server-side yet — left as a known limitation (see below) |
+| Duplicate submission | Fingerprinted per user on (normalised company_url, normalised jd). A resubmission returns the existing kit with `duplicate_of_existing_kit: true` and the UI says so, rather than spending a second pipeline run. `days` is excluded from the fingerprint — the same posting with a different runway is the same research, and the schedule rebuilds without regenerating anything. A previously *failed* kit is excluded, so resubmitting after a failure genuinely retries |
+| Generation orphaned by a restart | A kit "generating" for over 10 minutes is reported as failed on read, rather than leaving the interface polling a spinner forever |
+| An edit that would break Appendix A | Rejected with 422 and not saved. Deleting a scheduled question also tidies the schedule, since `validateKit` rejects a dangling `question_ids` reference |
 | 1-day / 60-day schedule | `buildSchedule` handles any `daysAvailable` — trailing/empty days get a "Review / practice" focus rather than breaking |
 
-## Known limitations / not yet built
+## Known limitations
 
-- Next.js UI (form, builder, practice mode) — biggest remaining piece.
-- Duplicate-submission detection.
-- `generateQuestionsForRequirement`/`Gaps` and `findInterviewDiscussion`
-  are implemented and unit-tested against a **mock** LLM client (no real
-  API key was available while scaffolding this); they have not yet been
-  run against the live Gemini API end-to-end.
-- Regeneration routes for question categories/brief are wired in the API
-  but return `501` pending the above live-LLM verification.
+- The LLM-calling modules are unit-tested against a **mock** client. They
+  have not yet been exercised against the live Gemini API end to end.
+- Ownership failures return **404, not 403**. A 403 confirms to a signed-in
+  stranger that a kit id exists and belongs to someone; nothing a
+  legitimate caller can do differs between the two answers.
+- There is no server-side render of kit content — every kit screen is
+  client-fetched. Fine for a private, authenticated tool; it would need
+  revisiting if kits were ever shareable.
+- Regenerating a question category reuses the stored company brief as
+  context rather than re-crawling. Cheaper and faster, but it will not pick
+  up a hiring page that appeared since the kit was first built.
 
 ## Testing
 
@@ -218,7 +277,29 @@ generated replacement items.
 npm test
 ```
 
-69 tests across `packages/core` and `apps/api`, including a full pipeline
+89 tests across `packages/core` and `apps/api`, including a full pipeline
 integration test that runs a **real** crawl (link ranking, robots.txt,
 anchor-text scoring) against an in-process local HTTP fixture server, with
 only the LLM calls mocked — the same code path the batch CLI uses.
+
+## Build ordering (why the scripts look like this)
+
+`packages/core` imports types from `packages/llm`, which resolves through
+`main: ./dist/index.js` — so llm must be built **before** core, and
+`npm run build:packages` enforces that order. `npm run evaluate` runs it
+first, so the batch entry point works from a clean clone with no separate
+build step, as Section 9 requires.
+
+Tests are the one exception: `vitest.config.ts` aliases the two internal
+packages to their TypeScript source, so `npm test` needs no build either.
+The API, the CLI and the web app all still consume the built `dist` output,
+so the test run is not exercising a different module graph than we ship.
+
+## Session cookies across origins
+
+Deployed, the web app and the API sit on different registrable domains, so
+every authenticated request is cross-site. The session cookie is therefore
+`sameSite: 'none'` + `secure` in production and `lax` locally — `lax` in
+production would silently drop the cookie and 401 every protected route.
+`CORS_ORIGIN` must list the deployed web origin exactly; `credentials` is
+on, so a wildcard will not work.

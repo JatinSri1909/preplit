@@ -54,6 +54,33 @@ authRouter.post(
   }),
 );
 
+/**
+ * Who am I? The web app calls this on load to decide between the signed-in
+ * and signed-out shell. Deliberately outside `requireAuth`: "not signed
+ * in" is a normal answer to this question, not an error, and a 401 here
+ * would make every first page load look like a failure in the console.
+ */
+authRouter.get(
+  '/me',
+  asyncHandler(async (req, res) => {
+    const userId = req.session?.userId;
+    if (typeof userId !== 'string' || userId.length === 0) {
+      res.json({ user: null });
+      return;
+    }
+    const user = await User.findById(userId).select('email').lean().catch(() => null);
+    // A valid-looking cookie for a user that no longer exists is an
+    // expired session by any useful definition — clear it rather than
+    // leaving the client in a half-signed-in state.
+    if (!user) {
+      req.session = null;
+      res.json({ user: null });
+      return;
+    }
+    res.json({ user: { id: String(user._id), email: user.email } });
+  }),
+);
+
 authRouter.post('/logout', (req, res) => {
   req.session = null;
   res.status(204).end();

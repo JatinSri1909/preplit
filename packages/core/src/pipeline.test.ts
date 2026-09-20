@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import { runPipeline } from './pipeline.js';
 import { validateKit } from './validation/validateKit.js';
 import { MockLlmClient } from './testFixtures/mockLlm.js';
+import { NO_INFORMATION_BRIEF_SUMMARY } from './generation/summarizeCompany.js';
 import { startFixtureServer } from './retrieval/testFixtures/fixtureServer.js';
 
 const JD = `Senior Backend Engineer
@@ -126,7 +127,11 @@ describe('runPipeline (integration: real crawl against fixture server, mocked LL
     );
 
     expect(kit.source.pages_used).toEqual([]);
-    expect(kit.company_brief.summary).toBe('No public company information could be found.');
+    // Asserted against the exported constant rather than a copy of the
+    // string: the point of the test is that an unreachable site yields the
+    // honest brief, not that the wording never changes.
+    expect(kit.company_brief.summary).toBe(NO_INFORMATION_BRIEF_SUMMARY);
+    expect(kit.company_brief.sources).toEqual([]);
     const { valid } = validateKit(kit);
     expect(valid).toBe(true); // still a valid, honest kit — not a hard failure
   });

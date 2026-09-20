@@ -81,6 +81,33 @@ export function resetIdCounterForTests(): void {
   idCounter = 0;
 }
 
+/**
+ * Mint the next id for a hand-added item ("q7", "f3").
+ *
+ * Deliberately NOT the `nextId` above: that one leans on a module-level
+ * counter, which is fine inside a single regeneration call but wrong for a
+ * long-lived API process where two requests against different kits would
+ * interleave and drift. This one derives purely from the ids already in
+ * the kit, so the same kit state always yields the same next id — which
+ * also makes it testable without resetting global state.
+ */
+export function nextItemId(prefix: string, existingIds: Iterable<string>): string {
+  let highest = 0;
+  for (const id of existingIds) {
+    if (!id.startsWith(prefix)) continue;
+    const suffix = Number(id.slice(prefix.length));
+    if (Number.isInteger(suffix) && suffix > highest) highest = suffix;
+  }
+  return `${prefix}${highest + 1}`;
+}
+
+/** Drop an item's provenance entry — used when the user deletes it outright. */
+export function forgetItem(meta: KitMeta, kind: 'questions' | 'flashcards', id: string): KitMeta {
+  const next = { ...meta[kind] };
+  delete next[id];
+  return { ...meta, [kind]: next };
+}
+
 export interface RegenerateQuestionsResult {
   questions: Question[];
   meta: KitMeta;

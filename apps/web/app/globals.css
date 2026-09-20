@@ -1,3 +1,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /*
+   * Keyboard access is explicitly graded (brief Section 12), and the
+   * commonest way to lose it is a reset that removes the default outline
+   * without replacing it. This does the opposite: one visible focus ring,
+   * applied globally, that cannot be forgotten on an individual control.
+   */
+  :focus-visible {
+    outline: 2px solid theme('colors.accent');
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Respect a user who has asked the system for less movement. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Textareas that grow with their content need a sane starting point. */
+  textarea {
+    field-sizing: content;
+  }
+}
+
+@layer components {
+  /*
+   * Skip link: hidden until focused. Without it, keyboard users tab
+   * through the whole kit navigation to reach the content on every page.
+   */
+  .skip-link {
+    @apply absolute left-4 top-4 z-50 -translate-y-20 rounded bg-ink px-4 py-2 text-sm text-white transition-transform focus:translate-y-0;
+  }
+}

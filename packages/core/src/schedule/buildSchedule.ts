@@ -36,6 +36,43 @@ import { Question, Requirement, Schedule, ScheduleDay } from '../types/kit.js';
 const DIFFICULTY_MINUTES: Record<1 | 2 | 3, number> = { 1: 15, 2: 25, 3: 40 };
 const DEFAULT_MINUTES_PER_DAY = 120;
 
+/** Minutes a question is budgeted, derived from its difficulty. */
+export function minutesForDifficulty(difficulty: 1 | 2 | 3): number {
+  return DIFFICULTY_MINUTES[difficulty];
+}
+
+/**
+ * Remove a question from every day of an existing schedule, reclaiming its
+ * budgeted minutes.
+ *
+ * Needed because `validateKit` rejects a schedule that references a
+ * question id that no longer exists — so deleting a question in the
+ * Builder has to tidy the schedule in the same operation, or the very next
+ * save writes a structurally invalid kit. Deliberately a surgical edit
+ * rather than a full `buildSchedule` re-run: a rebuild would reshuffle
+ * days the user is already looking at, which is a jarring side effect of
+ * deleting one question. Rebuilding stays an explicit user action.
+ */
+export function removeQuestionFromSchedule(
+  schedule: Schedule,
+  questionId: string,
+  difficulty: 1 | 2 | 3,
+): Schedule {
+  return {
+    ...schedule,
+    days: schedule.days.map((day) => {
+      if (!day.question_ids.includes(questionId)) return day;
+      const question_ids = day.question_ids.filter((id) => id !== questionId);
+      return {
+        ...day,
+        question_ids,
+        minutes: Math.max(0, day.minutes - DIFFICULTY_MINUTES[difficulty]),
+        focus: question_ids.length > 0 ? day.focus : 'Review / practice',
+      };
+    }),
+  };
+}
+
 function questionWeight(q: Question, requirementsById: Map<string, Requirement>): number {
   let best = 0;
   for (const rid of q.requirement_ids) {
