@@ -55,6 +55,12 @@ export interface BackoffOptions {
   maxRetries?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  /**
+   * Called with each error before falling back to the exponential formula.
+   * Return a delay in ms to use it instead — e.g. to honour a provider's
+   * Retry-After header, which tells you the exact wait rather than a guess.
+   */
+  getDelayMs?: (err: unknown, attempt: number) => number | undefined;
 }
 
 /**
@@ -68,7 +74,7 @@ export async function retryWithBackoff<T>(
   isRetryable: (err: unknown) => boolean,
   opts: BackoffOptions = {},
 ): Promise<T> {
-  const { maxRetries = 4, baseDelayMs = 1000, maxDelayMs = 20000 } = opts;
+  const { maxRetries = 4, baseDelayMs = 1000, maxDelayMs = 20000, getDelayMs } = opts;
   let attempt = 0;
   for (;;) {
     try {
@@ -76,7 +82,8 @@ export async function retryWithBackoff<T>(
     } catch (err) {
       attempt += 1;
       if (attempt > maxRetries || !isRetryable(err)) throw err;
-      const delay = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
+      const override = getDelayMs?.(err, attempt);
+      const delay = override ?? Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
       const jitter = Math.random() * delay * 0.25;
       await sleep(delay + jitter);
     }

@@ -17,7 +17,7 @@ Full-Stack Engineering Assessment submission — turns a pasted job description
 | Client state | TanStack Query                  | Generation is a long poll, every builder edit is an optimistic cache write that must roll back on failure, and the kit is read by sibling routes that must share one copy. Hand-rolling that is where "an edit in flight" bugs come from |
 | Language   | TypeScript throughout             | Shared types between API, CLI and (via package) the web app; zod schemas double as both request validation and the Appendix A structural contract |
 | Scraping   | Custom crawler (`cheerio` + native `fetch`) | No fixed path list — brief explicitly disallows that. See "Retrieval approach" below |
-| LLM        | **Google Gemini** (`gemini-2.0-flash` by default), via `@google/generative-ai` | Genuine free tier, JSON-mode output, generous-enough TPM for this workload |
+| LLM        | **Groq** (`llama-3.3-70b-versatile` by default), via `groq-sdk` | Genuine free tier, OpenAI-compatible JSON-mode output, fast/consistent low-latency inference |
 | Search (research step) | DuckDuckGo HTML endpoint scrape | No API key available/allowed per the brief; single seam (`searchWeb.ts`) to swap providers if needed |
 
 ## Setup
@@ -27,7 +27,7 @@ Full-Stack Engineering Assessment submission — turns a pasted job description
 ```bash
 git clone <repo>
 cd ai-interview-prep-kit
-cp .env.example .env   # fill in GEMINI_API_KEY, MONGODB_URI, SESSION_SECRET
+cp .env.example .env   # fill in GROQ_API_KEY, MONGODB_URI, SESSION_SECRET
 npm install
 npm run build           # builds packages/core and packages/llm first
 npm run dev:api          # apps/api on :4000
@@ -39,7 +39,7 @@ npm run dev:web          # apps/web on :3000 (separate terminal)
 ### Batch entry point (Appendix B)
 
 ```bash
-GEMINI_API_KEY=... ALLOW_PRIVATE_HOSTS=true \
+GROQ_API_KEY=... ALLOW_PRIVATE_HOSTS=true \
   npm run evaluate -- --input cases.json --output kits.json
 ```
 
@@ -59,10 +59,14 @@ set this in the deployed production API's environment.
 
 ## LLM provider
 
-Google Gemini, model `gemini-2.0-flash` (overridable via `GEMINI_MODEL`).
-Chosen for a genuine free tier and native structured-JSON output mode,
-which removes most of the "the model wrapped its JSON in prose" failure
-class outright.
+Groq, model `llama-3.3-70b-versatile` (overridable via `GROQ_MODEL`).
+Chosen for a genuine free tier, OpenAI-compatible JSON-mode output (removes
+most of the "the model wrapped its JSON in prose" failure class outright),
+and noticeably more consistent response quality/latency than Gemini's
+free-tier endpoint, which was the original choice before this switch.
+Free-tier tokens-per-minute limits vary by model — see
+https://console.groq.com/docs/rate-limits — and are self-limited against
+via `GROQ_TPM_BUDGET`.
 
 ## High-level architecture
 
@@ -86,7 +90,7 @@ packages/core/  Framework-free pipeline logic — the single source of truth,
   validation/   Appendix A structural + cross-referential validator
   state/        Builder edit/regenerate-without-clobbering merge logic
   pipeline.ts   wires all of the above into runPipeline()
-packages/llm/   Provider-agnostic LLM client — Gemini implementation,
+packages/llm/   Provider-agnostic LLM client — Groq implementation,
                 token-bucket rate limiter, backoff/retry, prompt-injection
                 guardrail helper
 cli/evaluate.ts  Appendix B entry point — imports packages/core directly
@@ -260,7 +264,7 @@ reappears immediately, which reads as punishment rather than revision.
 ## Known limitations
 
 - The LLM-calling modules are unit-tested against a **mock** client. They
-  have not yet been exercised against the live Gemini API end to end.
+  have not yet been exercised against the live Groq API end to end.
 - Ownership failures return **404, not 403**. A 403 confirms to a signed-in
   stranger that a kit id exists and belongs to someone; nothing a
   legitimate caller can do differs between the two answers.

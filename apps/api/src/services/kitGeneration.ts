@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { runPipeline, validateKit, initialMetaFor } from '@prep-kit/core';
-import { GeminiClient } from '@prep-kit/llm';
+import { GroqClient } from '@prep-kit/llm';
 import { KitDocument } from '../db/models/KitDocument.js';
 
 /**
@@ -9,10 +9,12 @@ import { KitDocument } from '../db/models/KitDocument.js';
  * code path (and so the routes stay readable).
  */
 
-export function llmClient(): GeminiClient {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set. See .env.example.');
-  return new GeminiClient({ apiKey, model: process.env.GEMINI_MODEL });
+export function llmClient(): GroqClient {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set. See .env.example.');
+  const tokensPerMinute = process.env.GROQ_TPM_BUDGET ? Number(process.env.GROQ_TPM_BUDGET) : undefined;
+  const requestsPerMinute = process.env.GROQ_RPM_BUDGET ? Number(process.env.GROQ_RPM_BUDGET) : undefined;
+  return new GroqClient({ apiKey, model: process.env.GROQ_MODEL, tokensPerMinute, requestsPerMinute });
 }
 
 export interface KitInput {

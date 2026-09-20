@@ -31,7 +31,7 @@ import {
   ErrorCodes,
   runPipeline,
 } from '@prep-kit/core';
-import { GeminiClient } from '@prep-kit/llm';
+import { GroqClient } from '@prep-kit/llm';
 
 interface Args {
   input: string;
@@ -58,12 +58,14 @@ async function main() {
   const raw = JSON.parse(await readFile(input, 'utf-8'));
   const cases: BatchCase[] = BatchInputSchema.parse(raw);
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    console.error('GEMINI_API_KEY is not set. See .env.example.');
+    console.error('GROQ_API_KEY is not set. See .env.example.');
     process.exit(1);
   }
-  const llm = new GeminiClient({ apiKey, model: process.env.GEMINI_MODEL });
+  const tokensPerMinute = process.env.GROQ_TPM_BUDGET ? Number(process.env.GROQ_TPM_BUDGET) : undefined;
+  const requestsPerMinute = process.env.GROQ_RPM_BUDGET ? Number(process.env.GROQ_RPM_BUDGET) : undefined;
+  const llm = new GroqClient({ apiKey, model: process.env.GROQ_MODEL, tokensPerMinute, requestsPerMinute });
   const allowPrivateHosts = process.env.ALLOW_PRIVATE_HOSTS === 'true';
 
   const results: BatchKitResult[] = [];
