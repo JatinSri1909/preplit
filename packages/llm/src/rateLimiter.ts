@@ -1,0 +1,84 @@
+/**
+ * Free-tier LLM providers cap tokens-per-minute, not just requests-per-
+ * minute (the brief calls this out explicitly as the #1 way to lose
+ * points). A naive per-request rate limiter isn't enough — a single large
+ * prompt can blow the TPM budget on its own.
+ *
+ * This is a simple token-bucket: callers reserve an estimated token cost
+ * before calling the provider, and the bucket refills continuously at
+ * tokensPerMinute / 60 per second. If there isn't enough budget, the
+ * caller awaits until there is, rather than firing the request and hoping.
+ *
+ * On top of that, retryWithBackoff wraps the actual provider call so a
+ * 429/"slow down" response (which can still happen — estimates are
+ * approximate) triggers exponential backoff with jitter instead of an
+ * immediate failure.
+ */
+export class TokenBucketRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+
+  constructor(
+    private readonly tokensPerMinute: number,
+    private readonly maxBucket: number = tokensPerMinute,
+  ) {
+    this.tokens = maxBucket;
+    this.lastRefill = Date.now();
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsedSec = (now - this.lastRefill) / 1000;
+    this.lastRefill = now;
+    this.tokens = Math.min(this.maxBucket, this.tokens + elapsedSec * (this.tokensPerMinute / 60));
+  }
+
+  async reserve(estimatedTokens: number): Promise<void> {
+    for (;;) {
+      this.refill();
+      if (this.tokens >= estimatedTokens) {
+        this.tokens -= estimatedTokens;
+        return;
+      }
+      const deficit = estimatedTokens - this.tokens;
+      const waitMs = Math.ceil((deficit / (this.tokensPerMinute / 60)) * 1000);
+      await sleep(Math.min(waitMs, 5000)); // recheck at least every 5s
+    }
+  }
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface BackoffOptions {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+}
+
+/**
+ * Retries `fn` on failures that `isRetryable` accepts, with exponential
+ * backoff + jitter. Re-throws the last error once maxRetries is exhausted
+ * so the caller (pipeline) can record it as a structured BatchError rather
+ * than crashing the whole batch run.
+ */
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  isRetryable: (err: unknown) => boolean,
+  opts: BackoffOptions = {},
+): Promise<T> {
+  const { maxRetries = 4, baseDelayMs = 1000, maxDelayMs = 20000 } = opts;
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt += 1;
+      if (attempt > maxRetries || !isRetryable(err)) throw err;
+      const delay = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
+      const jitter = Math.random() * delay * 0.25;
+      await sleep(delay + jitter);
+    }
+  }
+}

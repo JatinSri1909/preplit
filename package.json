@@ -1,0 +1,31 @@
+{
+  "name": "preplit",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Full-Stack Engineering Assessment — The AI Interview Prep Kit",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build": "npm run build --workspace=packages/llm && npm run build --workspace=packages/core && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "evaluate": "tsx cli/evaluate.ts",
+    "test": "vitest run",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
