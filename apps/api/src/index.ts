@@ -23,6 +23,18 @@ app.use(
 );
 app.use(sessionMiddleware());
 
+/**
+ * On a persistent server (Render, local dev) the database is connected
+ * once at startup, before anything is listening. On Vercel there is no
+ * startup phase to hang that off — each request may hit a cold function
+ * instance — so every request awaits the connection instead. connectDb()
+ * is idempotent (see db/connect.ts's `connected` flag), so on a warm
+ * instance this resolves immediately and adds no real latency.
+ */
+app.use((_req, _res, next) => {
+  connectDb().then(() => next(), next);
+});
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
@@ -43,13 +55,25 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   });
 });
 
-const port = Number(process.env.PORT ?? 4000);
+/**
+ * On Vercel there is no process to keep alive — the platform detects this
+ * module's default export and invokes it per-request on its own runtime,
+ * so calling app.listen() there would bind a port nothing will ever use.
+ * Everywhere else (Render, local dev, the batch CLI's fixture server)
+ * this is a real long-running process, so it connects once up front and
+ * exits loudly on failure rather than serving traffic against a database
+ * that was never there.
+ */
+if (!process.env.VERCEL) {
+  const port = Number(process.env.PORT ?? 4000);
+  connectDb()
+    .then(() => {
+      app.listen(port, () => console.log(`API listening on :${port}`));
+    })
+    .catch((err) => {
+      console.error('Failed to connect to MongoDB:', err);
+      process.exit(1);
+    });
+}
 
-connectDb()
-  .then(() => {
-    app.listen(port, () => console.log(`API listening on :${port}`));
-  })
-  .catch((err) => {
-    console.error('Failed to connect to MongoDB:', err);
-    process.exit(1);
-  });
+export default app;

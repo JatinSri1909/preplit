@@ -50,12 +50,28 @@ set this in the deployed production API's environment.
 
 ### Deployed
 
-- API: deploy `apps/api` (Render/Railway/Fly — any Node host with a free
-  tier). Set the same env vars as `.env.example`, with `ALLOW_PRIVATE_HOSTS`
-  left unset/false.
-- Web: deploy `apps/web` to Vercel, `NEXT_PUBLIC_API_URL` pointing at the
-  deployed API.
-- DB: MongoDB Atlas free tier.
+Both apps deploy to Vercel from this one repo, as two separate Vercel
+Projects pointed at different Root Directories — no second hosting
+provider needed:
+
+- **API** (`apps/api`): Root Directory `apps/api`. Vercel's zero-config
+  Express support detects `src/index.ts`'s default export and runs it as
+  a single Vercel Function on Fluid compute — no rewrite into
+  `api/*.ts` handlers needed. `apps/api/vercel.json` builds
+  `packages/core`/`packages/llm` before the function is bundled, since
+  those are workspace packages this app imports from `dist/`, not source.
+  Set the same env vars as `.env.example`, with `ALLOW_PRIVATE_HOSTS` left
+  unset/false, plus `VERCEL=1` is set automatically by the platform (this
+  is how `index.ts` knows not to call `app.listen()` there).
+- **Web** (`apps/web`): Root Directory `apps/web`. `apps/web/vercel.json`
+  builds the same two workspace packages first. `NEXT_PUBLIC_API_URL`
+  points at the API project's URL.
+- **DB**: MongoDB Atlas free tier (M0) — Vercel doesn't host databases,
+  so this is the one piece that lives elsewhere regardless.
+
+Locally and on the batch CLI, `apps/api` still runs as an ordinary
+persistent Express server (`app.listen`) — the Vercel Function path only
+kicks in under `VERCEL=1`.
 
 ## LLM provider
 
