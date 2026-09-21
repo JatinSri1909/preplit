@@ -18,6 +18,28 @@ const SECTIONS = [
 
 type SectionId = (typeof SECTIONS)[number][0];
 
+// One glance-able glyph per section, so the nav reads as a row of places
+// rather than a row of labels — purely wayfinding, so it takes the same
+// muted/accent colouring as the label next to it, never its own colour.
+const SECTION_ICONS: Record<SectionId, string> = {
+  brief: 'M4 19.5V6a2 2 0 0 1 2-2h9l5 5v10.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z|M8 9h5M8 13h8M8 17h8',
+  role: 'M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1|M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
+  questions: 'M12 17.5v.01M12 14c0-1.5 1.6-1.7 2.3-2.9.6-1 .2-2.6-1-3.3-1.1-.6-2.6-.4-3.4.6|M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 3v-3H6a2 2 0 0 1-2-2Z',
+  flashcards: 'M4 8a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z|M8.5 4h9a2 2 0 0 1 2 2v9',
+  schedule: 'M4 9h16M7 3v4M17 3v4|M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z',
+};
+
+function SectionIcon({ id, className }: { id: SectionId; className?: string }) {
+  const paths = SECTION_ICONS[id].split('|');
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      {paths.map((d) => (
+        <path key={d} d={d} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+    </svg>
+  );
+}
+
 export function KitBuilder({ kitId }: { kitId: string }) {
   const [section, setSection] = useState<SectionId>('brief');
   const searchParams = useSearchParams();
@@ -106,12 +128,13 @@ export function KitBuilder({ kitId }: { kitId: string }) {
               key={id}
               onClick={() => setSection(id)}
               aria-current={section === id ? 'page' : undefined}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+              className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 section === id
                   ? 'border-accent text-accent'
                   : 'border-transparent text-muted hover:text-ink'
               }`}
             >
+              <SectionIcon id={id} className="h-4 w-4" />
               {label}
             </button>
           ))}
@@ -152,7 +175,7 @@ function GeneratingState() {
         kit appears on your dashboard when it is done.
       </p>
 
-      <ol className="mt-6 space-y-2 text-sm text-muted">
+      <ol className="mt-6 space-y-2.5 text-sm text-muted">
         {[
           'Reading the job description for its requirements',
           'Crawling the company site for what they do and how they hire',
@@ -160,10 +183,15 @@ function GeneratingState() {
           'Writing questions for each requirement',
           'Checking every must-have has a question, and filling the gaps',
           'Laying the material out across your days',
-        ].map((step) => (
-          <li key={step} className="flex gap-2">
-            <span aria-hidden className="text-rule">
-              ·
+        ].map((step, i) => (
+          <li
+            key={step}
+            className="flex animate-fade-in-up gap-2.5"
+            style={{ animationDelay: `${i * 120}ms` }}
+          >
+            <span aria-hidden className="relative mt-1.5 flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/50" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
             </span>
             {step}
           </li>

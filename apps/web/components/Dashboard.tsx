@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { kits, type KitSummary } from '../lib/api';
 import { CreateKitForm } from './CreateKitForm';
@@ -31,7 +32,15 @@ export function Dashboard() {
       <CreateKitForm />
 
       <section>
-        <h2 className="font-read text-xl">Your kits</h2>
+        <h2 className="flex items-center gap-2 font-read text-xl">
+          <span aria-hidden className="inline-block h-4 w-1 rounded-full bg-accent" />
+          Your kits
+          {data && data.length > 0 && (
+            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-sans font-medium text-accent">
+              {data.length}
+            </span>
+          )}
+        </h2>
 
         <div className="mt-4">
           {isLoading ? (
@@ -45,12 +54,13 @@ export function Dashboard() {
             />
           ) : (
             <ul className="space-y-2">
-              {data.map((kit) => (
+              {data.map((kit, i) => (
                 <KitRow
                   key={kit.id}
                   kit={kit}
                   onDelete={() => remove.mutate(kit.id)}
                   deleting={remove.isPending && remove.variables === kit.id}
+                  style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
                 />
               ))}
             </ul>
@@ -65,13 +75,30 @@ function KitRow({
   kit,
   onDelete,
   deleting,
+  style,
 }: {
   kit: KitSummary;
   onDelete: () => void;
   deleting: boolean;
+  style?: CSSProperties;
 }) {
+  // The left edge names the kit's state at a glance, before you read a
+  // word of it — the same colours the builder uses for coverage, so a
+  // "gap" here means the same thing it means everywhere else in the app.
+  const statusBar =
+    kit.status === 'generating'
+      ? 'border-l-accent'
+      : kit.status === 'failed'
+        ? 'border-l-gap'
+        : kit.uncovered_count > 0
+          ? 'border-l-gap'
+          : 'border-l-covered';
+
   return (
-    <li className="flex items-center gap-4 rounded border border-rule bg-surface p-4">
+    <li
+      style={style}
+      className={`flex animate-fade-in-up items-center gap-4 rounded-lg border border-l-4 border-rule bg-surface p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift ${statusBar}`}
+    >
       <div className="min-w-0 flex-1">
         {kit.status === 'ready' ? (
           <Link href={`/kits/${kit.id}`} className="block">

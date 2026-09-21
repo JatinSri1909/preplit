@@ -99,10 +99,33 @@ export function CreateKitForm() {
   }
 
   return (
-    <section className="rounded border border-rule bg-surface p-4 sm:p-6">
-      <h2 className="font-read text-xl">Prepare for a role</h2>
+    <section className="relative overflow-hidden rounded-lg border border-rule bg-surface p-4 shadow-soft sm:p-6">
+      <span aria-hidden className="blob -right-10 -top-14 h-48 w-48 bg-accent/30" />
+      <span aria-hidden className="blob -bottom-16 -left-6 h-40 w-40 bg-accent/15" />
 
-      <div className="mt-4 flex gap-1" role="tablist" aria-label="How to add roles">
+      <h2 className="relative flex items-center gap-2 font-read text-xl">
+        <span
+          aria-hidden
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-strong text-white shadow-soft"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+            <path
+              d="M4 19.5V6a2 2 0 0 1 2-2h9l5 5v10.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+            <path d="M8 9h5M8 13h8M8 17h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </span>
+        Prepare for a role
+      </h2>
+
+      <div
+        className="mt-4 inline-flex gap-1 rounded-full bg-canvas p-1"
+        role="tablist"
+        aria-label="How to add roles"
+      >
         {(
           [
             ['single', 'Paste one role'],
@@ -114,8 +137,8 @@ export function CreateKitForm() {
             role="tab"
             aria-selected={mode === value}
             onClick={() => setMode(value)}
-            className={`rounded px-3 py-1.5 text-sm font-medium ${
-              mode === value ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-canvas'
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+              mode === value ? 'bg-surface text-accent shadow-soft' : 'text-muted hover:text-ink'
             }`}
           >
             {label}
@@ -179,6 +202,17 @@ export function CreateKitForm() {
 
           <Button type="submit" variant="primary" loading={createOne.isPending}>
             {createOne.isPending ? 'Starting research' : 'Build the kit'}
+            {!createOne.isPending && (
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                <path
+                  d="M5 12h14M13 6l6 6-6 6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
           </Button>
         </form>
       ) : (

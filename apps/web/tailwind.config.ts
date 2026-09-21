@@ -14,7 +14,9 @@ import type { Config } from 'tailwindcss';
  *
  * Colour carries state, never decoration: `accent` marks the primary
  * action and focus, `gap` marks an uncovered must-have requirement, and
- * `covered` confirms one. Nothing else is coloured.
+ * `covered` confirms one. `violet`/`teal`/`rose` extend that same idea to
+ * question category — technical stays the primary blue, the other three
+ * categories get their own hue so the bank is scannable at a glance.
  */
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
@@ -27,10 +29,18 @@ const config: Config = {
         muted: '#5B6270',
         rule: '#E2E5EA',
         accent: '#2F5BD7',
+        'accent-strong': '#1E3FA6',
         'accent-soft': '#EEF2FD',
         gap: '#B45309',
         'gap-soft': '#FEF6EC',
         covered: '#15803D',
+        'covered-soft': '#EDF9F0',
+        violet: '#6D42C7',
+        'violet-soft': '#F1ECFB',
+        teal: '#0E8074',
+        'teal-soft': '#E9F7F5',
+        rose: '#BE3C6D',
+        'rose-soft': '#FBEEF3',
       },
       fontFamily: {
         // App chrome: buttons, labels, navigation, counts.
@@ -41,6 +51,26 @@ const config: Config = {
       maxWidth: {
         // Body copy stays under ~75 characters.
         read: '68ch',
+      },
+      boxShadow: {
+        // A resting card: barely there, just enough to lift it off the canvas.
+        soft: '0 1px 2px rgba(26,29,35,0.04), 0 6px 16px -8px rgba(26,29,35,0.10)',
+        // What a card gains on hover — reads as "this responds to you".
+        lift: '0 10px 24px -10px rgba(47,91,215,0.35)',
+      },
+      keyframes: {
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-6px)' },
+        },
+      },
+      animation: {
+        'fade-in-up': 'fadeInUp 0.35s ease-out both',
+        float: 'float 5s ease-in-out infinite',
       },
     },
   },

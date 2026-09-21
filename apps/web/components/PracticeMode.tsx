@@ -182,11 +182,14 @@ export function PracticeMode({ kitId }: { kitId: string }) {
               Card {index + 1} of {data.queue.length}
             </p>
 
-            <div className="rounded border border-rule bg-surface p-6">
+            <div
+              key={card.id}
+              className="animate-fade-in-up rounded-lg border border-rule bg-surface p-6 shadow-soft"
+            >
               <p className="max-w-read font-read text-xl leading-snug">{card.front}</p>
 
               {revealed ? (
-                <p className="mt-5 max-w-read border-t border-rule pt-5 font-read leading-relaxed text-muted">
+                <p className="mt-5 max-w-read animate-fade-in-up border-t border-rule pt-5 font-read leading-relaxed text-muted">
                   {card.back || 'This card has no answer on the back yet.'}
                 </p>
               ) : (
@@ -201,19 +204,30 @@ export function PracticeMode({ kitId }: { kitId: string }) {
               <fieldset className="space-y-2">
                 <legend className="text-sm text-muted">How did that feel?</legend>
                 <div className="grid gap-2 sm:grid-cols-3">
-                  {CONFIDENCE.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => rate(option.value)}
-                      className="rounded border border-rule bg-surface px-3 py-2 text-left hover:border-accent"
-                    >
-                      <span className="block text-sm font-medium">
-                        {option.label}
-                        <span className="ml-1 font-normal text-muted">{option.value}</span>
-                      </span>
-                      <span className="block text-xs text-muted">{option.hint}</span>
-                    </button>
-                  ))}
+                  {CONFIDENCE.map((option) => {
+                    // Confidence is state, so it gets the same colour
+                    // vocabulary as coverage: shaky in the middle stays
+                    // neutral, the two extremes borrow gap/covered.
+                    const tint =
+                      option.value === 1
+                        ? 'border-gap/30 bg-gap-soft/60 hover:border-gap'
+                        : option.value === 3
+                          ? 'border-covered/30 bg-covered-soft hover:border-covered'
+                          : 'border-rule bg-surface hover:border-accent';
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => rate(option.value)}
+                        className={`rounded-lg border px-3 py-2 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-lift ${tint}`}
+                      >
+                        <span className="block text-sm font-medium">
+                          {option.label}
+                          <span className="ml-1 font-normal text-muted">{option.value}</span>
+                        </span>
+                        <span className="block text-xs text-muted">{option.hint}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </fieldset>
             )}

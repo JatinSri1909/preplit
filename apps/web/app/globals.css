@@ -40,4 +40,50 @@
   .skip-link {
     @apply absolute left-4 top-4 z-50 -translate-y-20 rounded bg-ink px-4 py-2 text-sm text-white transition-transform focus:translate-y-0;
   }
+
+  /*
+   * A faint, fixed wash behind the whole app — two soft glows anchored to
+   * the viewport corners. Replaces a flat canvas colour with something
+   * that has a little depth, without ever competing with content or
+   * showing through a card.
+   */
+  .app-backdrop {
+    background-color: theme('colors.canvas');
+    background-image:
+      radial-gradient(55rem 38rem at 100% -10%, theme('colors.accent-soft') 0%, transparent 60%),
+      radial-gradient(50rem 30rem at -10% 110%, theme('colors.covered-soft') 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+
+  /*
+   * A blurred blob of colour, dropped into a `relative overflow-hidden`
+   * container as a decorative accent behind real content. Two colour
+   * variants so a card can pair one with the ambient backdrop instead of
+   * repeating it.
+   */
+  .blob {
+    @apply pointer-events-none absolute -z-10 rounded-full blur-3xl;
+  }
+
+  /* A loading placeholder that reads as "fetching", not just "disabled". */
+  .skeleton {
+    @apply rounded-lg;
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+    background-image: linear-gradient(
+      100deg,
+      theme('colors.surface') 35%,
+      theme('colors.rule') 50%,
+      theme('colors.surface') 65%
+    );
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
 }

@@ -18,6 +18,20 @@ const CATEGORY_LABELS: Record<QuestionCategory, string> = {
 };
 
 /**
+ * Category is state, same as coverage — so it gets the same treatment: a
+ * colour that means one specific thing everywhere it appears, not a
+ * decorative accent. Technical stays the app's primary blue; the other
+ * three get their own hue so a mixed bank is scannable at a glance
+ * without reading every label.
+ */
+export const CATEGORY_COLORS: Record<QuestionCategory, { text: string; solid: string; soft: string }> = {
+  technical: { text: 'text-accent', solid: 'bg-accent', soft: 'bg-accent-soft' },
+  behavioural: { text: 'text-violet', solid: 'bg-violet', soft: 'bg-violet-soft' },
+  'system-design': { text: 'text-teal', solid: 'bg-teal', soft: 'bg-teal-soft' },
+  'company-fit': { text: 'text-rose', solid: 'bg-rose', soft: 'bg-rose-soft' },
+};
+
+/**
  * The question bank.
  *
  * Reordering is done with buttons rather than drag-and-drop. That is a
@@ -107,23 +121,33 @@ export function QuestionsSection({
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1.5">
         {(['all', ...CATEGORIES] as const).map((value) => {
           const count =
             value === 'all'
               ? kit.questions.length
               : kit.questions.filter((q) => q.category === value).length;
+          const active = category === value;
+          const colors = value === 'all' ? null : CATEGORY_COLORS[value];
           return (
             <button
               key={value}
               onClick={() => setCategory(value)}
-              aria-pressed={category === value}
-              className={`rounded px-2.5 py-1 text-sm ${
-                category === value ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-canvas'
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm transition-all ${
+                active
+                  ? `${colors?.solid ?? 'bg-accent'} text-white shadow-soft`
+                  : 'text-muted hover:bg-canvas'
               }`}
             >
+              {colors && (
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-white' : colors.solid}`}
+                />
+              )}
               {value === 'all' ? 'All' : CATEGORY_LABELS[value]}{' '}
-              <span className="text-muted">{count}</span>
+              <span className={active ? 'text-white/80' : 'text-muted'}>{count}</span>
             </button>
           );
         })}
@@ -210,9 +234,10 @@ function QuestionCard({
   onDelete: () => void;
 }) {
   const linked = requirements.filter((r) => question.requirement_ids.includes(r.id));
+  const colors = CATEGORY_COLORS[question.category];
 
   return (
-    <li className="rounded border border-rule bg-surface">
+    <li className="rounded-lg border border-rule bg-surface shadow-soft transition-shadow hover:shadow-lift">
       <div className="flex items-start gap-3 p-4">
         <div className="min-w-0 flex-1 space-y-3">
           <EditableText
@@ -240,7 +265,7 @@ function QuestionCard({
               id={`cat-${question.id}`}
               value={question.category}
               onChange={(e) => onEdit({ category: e.target.value as QuestionCategory })}
-              className="rounded border border-rule bg-surface px-1.5 py-0.5"
+              className={`rounded border-0 px-1.5 py-0.5 font-medium ${colors.soft} ${colors.text}`}
             >
               {CATEGORIES.map((value) => (
                 <option key={value} value={value}>

@@ -25,12 +25,13 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    'inline-flex items-center justify-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+    'inline-flex items-center justify-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100';
   const variants = {
-    primary: 'bg-accent text-white hover:bg-accent/90',
-    secondary: 'border border-rule bg-surface text-ink hover:bg-canvas',
+    primary:
+      'bg-gradient-to-b from-accent to-accent-strong text-white shadow-soft hover:shadow-lift hover:brightness-110',
+    secondary: 'border border-rule bg-surface text-ink hover:border-accent/40 hover:bg-canvas',
     ghost: 'text-muted hover:bg-canvas hover:text-ink',
-    danger: 'border border-rule bg-surface text-gap hover:bg-gap-soft',
+    danger: 'border border-rule bg-surface text-gap hover:border-gap/40 hover:bg-gap-soft',
   };
 
   return (
@@ -136,7 +137,20 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded border border-dashed border-rule bg-surface px-6 py-10 text-center">
+    <div className="animate-fade-in-up rounded-lg border border-dashed border-rule bg-surface px-6 py-10 text-center">
+      <span
+        aria-hidden
+        className="mx-auto mb-3 grid h-10 w-10 animate-float place-items-center rounded-full bg-accent-soft text-accent"
+      >
+        <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+          <path
+            d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M17.5 17.5 15 15M6 18l2.5-2.5M17.5 6.5 15 9"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      </span>
       <p className="font-medium text-ink">{title}</p>
       <p className="mx-auto mt-1 max-w-read text-sm text-muted">{description}</p>
       {action && <div className="mt-4 flex justify-center">{action}</div>}
@@ -149,7 +163,7 @@ export function LoadingRows({ rows = 3 }: { rows?: number }) {
   return (
     <div className="space-y-3" aria-hidden>
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="h-16 animate-pulse rounded border border-rule bg-surface" />
+        <div key={i} className="skeleton h-16 border border-rule" />
       ))}
     </div>
   );

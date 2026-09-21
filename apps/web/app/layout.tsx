@@ -4,7 +4,7 @@ import { Providers } from './providers';
 import { AppHeader } from '../components/AppHeader';
 
 export const metadata: Metadata = {
-  title: 'Interview Prep Kit',
+  title: 'Preplit',
   description: 'Turn a job description into a personalised interview prep kit.',
 };
 
@@ -13,7 +13,7 @@ export const viewport = { width: 'device-width', initialScale: 1 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-canvas font-sans text-ink antialiased">
+      <body className="app-backdrop min-h-screen font-sans text-ink antialiased">
         <Providers>
           <a href="#main" className="skip-link">
             Skip to content

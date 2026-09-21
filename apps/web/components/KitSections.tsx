@@ -6,6 +6,7 @@ import { builder } from '../lib/api';
 import { useBuilderMutation } from '../lib/useKit';
 import { EditableText } from './EditableText';
 import { ProvenanceMark } from './ProvenanceMark';
+import { CATEGORY_COLORS } from './QuestionsSection';
 import { Button, EmptyState, ErrorNote, inputClass } from './ui';
 
 // --- company brief ---
@@ -46,7 +47,7 @@ export function BriefSection({ kitId, kit, meta }: { kitId: string; kit: Kit; me
 
       <ErrorNote error={edit.error || regenerate.error} />
 
-      <div className="space-y-4 rounded border border-rule bg-surface p-4">
+      <div className="space-y-4 rounded-lg border border-rule bg-surface p-4 shadow-soft">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs text-muted">
             <span className="font-medium text-ink">Summary</span>
@@ -112,7 +113,7 @@ export function RoleSection({ kit }: { kit: Kit }) {
         The role
       </h2>
 
-      <div className="rounded border border-rule bg-surface p-4">
+      <div className="rounded-lg border border-rule bg-surface p-4 shadow-soft">
         <p className="font-read text-lg">{kit.role.title}</p>
         {kit.role.seniority && <p className="text-sm text-muted">{kit.role.seniority}</p>}
 
@@ -158,7 +159,9 @@ function RequirementList({
         {requirements.map((r) => (
           <li
             key={r.id}
-            className="flex items-start gap-3 rounded border border-rule bg-surface px-3 py-2"
+            className={`flex items-start gap-3 rounded-lg border border-l-4 bg-surface px-3 py-2 transition-colors ${
+              uncovered.has(r.id) ? 'border-rule border-l-gap' : 'border-rule border-l-covered/50'
+            }`}
           >
             <span className="max-w-read flex-1 font-read leading-relaxed">{r.text}</span>
             {uncovered.has(r.id) ? (
@@ -264,7 +267,10 @@ export function FlashcardsSection({ kitId, kit, meta }: { kitId: string; kit: Ki
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {kit.flashcards.map((card) => (
-            <li key={card.id} className="space-y-2 rounded border border-rule bg-surface p-3">
+            <li
+              key={card.id}
+              className="space-y-2 rounded-lg border border-rule bg-surface p-3 shadow-soft transition-shadow hover:shadow-lift"
+            >
               <EditableText
                 label="card front"
                 value={card.front}
@@ -356,7 +362,10 @@ export function ScheduleSection({ kitId, kit }: { kitId: string; kit: Kit }) {
 
       <ol className="space-y-3">
         {kit.schedule.days.map((day) => (
-          <li key={day.day} className="rounded border border-rule bg-surface p-4">
+          <li
+            key={day.day}
+            className="rounded-lg border border-rule bg-surface p-4 shadow-soft transition-shadow hover:shadow-lift"
+          >
             <div className="flex items-baseline justify-between gap-3">
               <h3 className="font-read text-lg">
                 Day {day.day}
@@ -370,12 +379,20 @@ export function ScheduleSection({ kitId, kit }: { kitId: string; kit: Kit }) {
                 Nothing new scheduled — use it to revisit the cards you were least sure about.
               </p>
             ) : (
-              <ul className="mt-2 max-w-read space-y-1 font-read leading-relaxed">
-                {day.question_ids.map((id) => (
-                  <li key={id} className="text-sm">
-                    {questionsById.get(id)?.prompt ?? id}
-                  </li>
-                ))}
+              <ul className="mt-2 max-w-read space-y-1.5 font-read leading-relaxed">
+                {day.question_ids.map((id) => {
+                  const question = questionsById.get(id);
+                  const colors = question ? CATEGORY_COLORS[question.category] : null;
+                  return (
+                    <li key={id} className="flex items-start gap-2 text-sm">
+                      <span
+                        aria-hidden
+                        className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${colors?.solid ?? 'bg-rule'}`}
+                      />
+                      {question?.prompt ?? id}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </li>
