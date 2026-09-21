@@ -5,7 +5,7 @@ build/
 *.tsbuildinfo
 .env
 .env.local
-coverage/
+/coverage/
 *.log
 .DS_Store
 /cli/output/
