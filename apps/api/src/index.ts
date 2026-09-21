@@ -14,6 +14,14 @@ import { authRouter } from './routes/authRoutes.js';
 import { kitsRouter } from './routes/kitsRoutes.js';
 
 const app = express();
+// Every deployment target (Vercel, Render, ...) terminates TLS at its own
+// edge/proxy and forwards to this process over plain HTTP, signalling the
+// original scheme via X-Forwarded-Proto. Without this, Express's
+// req.secure is always false behind that proxy, which makes the
+// session cookie's `secure: true` option (see auth/session.ts) silently
+// refuse to set the cookie at all in production — not a rejected cookie,
+// no Set-Cookie header sent in the first place.
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
 app.use(
   cors({
