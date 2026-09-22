@@ -84,7 +84,10 @@ export function KitBuilder({ kitId }: { kitId: string }) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="space-y-1">
+      <Link href="/" className="text-sm text-muted hover:text-ink">
+        ← Back to your kits
+      </Link>
+      <header className="mt-4 space-y-1">
         <h1 className="font-read text-2xl">{kit.role.title}</h1>
         <p className="text-sm text-muted">
           {kit.source.company}

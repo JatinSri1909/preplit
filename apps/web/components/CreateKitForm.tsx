@@ -99,7 +99,8 @@ export function CreateKitForm() {
   }
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-rule bg-surface p-4 shadow-soft sm:p-6">
+    <div className="grid-frame">
+      <section className="relative overflow-hidden bg-surface p-4 shadow-soft sm:p-6">
       <span aria-hidden className="blob -right-10 -top-14 h-48 w-48 bg-accent/30" />
       <span aria-hidden className="blob -bottom-16 -left-6 h-40 w-40 bg-accent/15" />
 
@@ -122,7 +123,7 @@ export function CreateKitForm() {
       </h2>
 
       <div
-        className="mt-4 inline-flex gap-1 rounded-full bg-canvas p-1"
+        className="mt-4 inline-flex gap-1 rounded bg-canvas p-1"
         role="tablist"
         aria-label="How to add roles"
       >
@@ -137,7 +138,7 @@ export function CreateKitForm() {
             role="tab"
             aria-selected={mode === value}
             onClick={() => setMode(value)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+            className={`rounded px-3 py-1.5 text-sm font-medium transition-all ${
               mode === value ? 'bg-surface text-accent shadow-soft' : 'text-muted hover:text-ink'
             }`}
           >
@@ -281,5 +282,6 @@ export function CreateKitForm() {
         </div>
       )}
     </section>
+    </div>
   );
 }

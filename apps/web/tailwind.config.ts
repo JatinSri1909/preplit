@@ -15,26 +15,38 @@ import type { Config } from 'tailwindcss';
  * Colour carries state, never decoration: `accent` marks the primary
  * action and focus, `gap` marks an uncovered must-have requirement, and
  * `covered` confirms one. `violet`/`teal`/`rose` extend that same idea to
- * question category — technical stays the primary blue, the other three
- * categories get their own hue so the bank is scannable at a glance.
+ * question category — technical stays the primary accent, the other
+ * three categories get their own hue so the bank is scannable at a
+ * glance.
+ *
+ * The palette itself (warm cream canvas, deep forest-green accent) is
+ * pulled from trao.ai, who this kit is built for — matched by sampling
+ * their live site's computed styles rather than eyeballing a screenshot.
+ * Cards stay a cleaner white than Trao's own (barely-there beige) because
+ * this is a workbench full of dense forms and lists, not a marketing
+ * page — real content needs the extra contrast to stay legible. Corners
+ * match Trao's sharp rectangles exactly: `borderRadius` below zeroes out
+ * every rounded-* size except `full` (true circles — icon badges, dots —
+ * stay circular), so every card and button goes sharp without touching
+ * each component's own className.
  */
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        canvas: '#F4F5F7',
+        canvas: '#FAF9F5',
         surface: '#FFFFFF',
-        ink: '#1A1D23',
-        muted: '#5B6270',
-        rule: '#E2E5EA',
-        accent: '#2F5BD7',
-        'accent-strong': '#1E3FA6',
-        'accent-soft': '#EEF2FD',
-        gap: '#B45309',
-        'gap-soft': '#FEF6EC',
+        ink: '#141413',
+        muted: '#6B6B64',
+        rule: '#E5E1D8',
+        accent: '#017752',
+        'accent-strong': '#014F38',
+        'accent-soft': '#E6F2ED',
+        gap: '#9B6836',
+        'gap-soft': '#F5EDE3',
         covered: '#15803D',
-        'covered-soft': '#EDF9F0',
+        'covered-soft': '#EDF6EC',
         violet: '#6D42C7',
         'violet-soft': '#F1ECFB',
         teal: '#0E8074',
@@ -52,11 +64,22 @@ const config: Config = {
         // Body copy stays under ~75 characters.
         read: '68ch',
       },
+      borderRadius: {
+        DEFAULT: '0px',
+        sm: '0px',
+        md: '0px',
+        lg: '0px',
+        xl: '0px',
+        '2xl': '0px',
+        '3xl': '0px',
+        // `full` is untouched — true circles (icon badges, status dots)
+        // stay round; only rectangular corners go sharp.
+      },
       boxShadow: {
         // A resting card: barely there, just enough to lift it off the canvas.
         soft: '0 1px 2px rgba(26,29,35,0.04), 0 6px 16px -8px rgba(26,29,35,0.10)',
         // What a card gains on hover — reads as "this responds to you".
-        lift: '0 10px 24px -10px rgba(47,91,215,0.35)',
+        lift: '0 10px 24px -10px rgba(1,119,82,0.35)',
       },
       keyframes: {
         fadeInUp: {

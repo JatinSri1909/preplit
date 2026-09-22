@@ -41,18 +41,55 @@
     @apply absolute left-4 top-4 z-50 -translate-y-20 rounded bg-ink px-4 py-2 text-sm text-white transition-transform focus:translate-y-0;
   }
 
-  /*
-   * A faint, fixed wash behind the whole app — two soft glows anchored to
-   * the viewport corners. Replaces a flat canvas colour with something
-   * that has a little depth, without ever competing with content or
-   * showing through a card.
-   */
+  /* The flat canvas colour underneath the grid overlay below. */
   .app-backdrop {
     background-color: theme('colors.canvas');
+  }
+
+  /*
+   * On trao.ai's own hero, the fine grid only exists in the margins
+   * flanking the hero text — directly behind the content column, it's
+   * blank, with just the two boundary lines running the full height
+   * (that's where their small "+" marks sit). It is not a tile that
+   * happens to be covered by opaque content; the area behind the
+   * content is genuinely empty. This reproduces that with two layers:
+   * a fine 100px tile across the full viewport, and a second layer on
+   * top that paints flat canvas colour — with a visible border on its
+   * two vertical edges — over exactly this app's main `max-w-6xl`
+   * content column, erasing the tile there without erasing it either
+   * side.
+   */
+  .grid-backdrop {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    display: none;
+    background-color: theme('colors.canvas');
     background-image:
-      radial-gradient(55rem 38rem at 100% -10%, theme('colors.accent-soft') 0%, transparent 60%),
-      radial-gradient(50rem 30rem at -10% 110%, theme('colors.covered-soft') 0%, transparent 60%);
-    background-attachment: fixed;
+      linear-gradient(to right, theme('colors.rule') 1px, transparent 1px),
+      linear-gradient(theme('colors.rule') 1px, transparent 1px),
+      radial-gradient(55rem 38rem at 100% -10%, theme('colors.accent-soft') 0%, transparent 60%);
+    background-size: 100px 100px, 100px 100px, auto;
+  }
+
+  @media (min-width: 768px) {
+    .grid-backdrop {
+      display: block;
+    }
+  }
+
+  .grid-backdrop::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 72rem; /* mirrors max-w-6xl, this app's main content column */
+    transform: translateX(-50%);
+    background-color: theme('colors.canvas');
+    border-inline: 1px solid theme('colors.rule');
   }
 
   /*
@@ -63,6 +100,15 @@
    */
   .blob {
     @apply pointer-events-none absolute -z-10 rounded-full blur-3xl;
+  }
+
+  /*
+   * The border IS a grid line (same colour, same weight) so a framed
+   * card reads as cut from the surrounding grid rather than floating
+   * over unrelated wallpaper.
+   */
+  .grid-frame {
+    border: 1px solid theme('colors.rule');
   }
 
   /* A loading placeholder that reads as "fetching", not just "disabled". */

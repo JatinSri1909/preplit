@@ -134,7 +134,7 @@ export function QuestionsSection({
               key={value}
               onClick={() => setCategory(value)}
               aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-sm transition-all ${
                 active
                   ? `${colors?.solid ?? 'bg-accent'} text-white shadow-soft`
                   : 'text-muted hover:bg-canvas'

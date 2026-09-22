@@ -12,7 +12,7 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-rule bg-surface/90 backdrop-blur">
       <div aria-hidden className="h-[4px] w-full bg-gradient-to-r from-accent via-accent-strong to-accent" />
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-8">
         <Link href="/" className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
           <span
             aria-hidden

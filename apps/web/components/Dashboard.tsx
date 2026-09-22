@@ -33,10 +33,10 @@ export function Dashboard() {
 
       <section>
         <h2 className="flex items-center gap-2 font-read text-xl">
-          <span aria-hidden className="inline-block h-4 w-1 rounded-full bg-accent" />
+          <span aria-hidden className="inline-block h-4 w-1 bg-accent" />
           Your kits
           {data && data.length > 0 && (
-            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-sans font-medium text-accent">
+            <span className="rounded bg-accent-soft px-2 py-0.5 text-xs font-sans font-medium text-accent">
               {data.length}
             </span>
           )}
@@ -82,22 +82,17 @@ function KitRow({
   deleting: boolean;
   style?: CSSProperties;
 }) {
-  // The left edge names the kit's state at a glance, before you read a
-  // word of it — the same colours the builder uses for coverage, so a
-  // "gap" here means the same thing it means everywhere else in the app.
+  // The left edge flags a problem worth noticing before you read a word
+  // of the card — the same "gap" colour the builder uses for an
+  // uncovered requirement. Nothing to flag means no accent at all,
+  // rather than a colour that means "this is fine".
   const statusBar =
-    kit.status === 'generating'
-      ? 'border-l-accent'
-      : kit.status === 'failed'
-        ? 'border-l-gap'
-        : kit.uncovered_count > 0
-          ? 'border-l-gap'
-          : 'border-l-covered';
+    kit.status === 'failed' || kit.uncovered_count > 0 ? 'border-l-4 border-l-gap' : '';
 
   return (
     <li
       style={style}
-      className={`flex animate-fade-in-up items-center gap-4 rounded-lg border border-l-4 border-rule bg-surface p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift ${statusBar}`}
+      className={`grid-frame flex animate-fade-in-up items-center gap-4 bg-surface p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift ${statusBar}`}
     >
       <div className="min-w-0 flex-1">
         {kit.status === 'ready' ? (

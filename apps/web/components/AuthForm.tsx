@@ -31,7 +31,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
 
   return (
     <div className="mx-auto max-w-sm px-4 py-12 sm:px-6">
-      <div className="animate-fade-in-up rounded-lg border border-rule bg-surface p-6 shadow-soft sm:p-8">
+      <div className="grid-frame animate-fade-in-up bg-surface p-6 shadow-soft sm:p-8">
         <h1 className="font-read text-2xl">{isRegister ? 'Create an account' : 'Sign in'}</h1>
         <p className="mt-1 text-sm text-muted">
           {isRegister

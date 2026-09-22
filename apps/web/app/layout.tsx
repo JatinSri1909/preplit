@@ -14,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="app-backdrop min-h-screen font-sans text-ink antialiased">
+        <div aria-hidden className="grid-backdrop" />
         <Providers>
           <a href="#main" className="skip-link">
             Skip to content
