@@ -12,6 +12,7 @@ import { connectDb } from './db/connect.js';
 import { sessionMiddleware, requireAuth } from './auth/session.js';
 import { authRouter } from './routes/authRoutes.js';
 import { kitsRouter } from './routes/kitsRoutes.js';
+import { llmPoolStatus } from './services/kitGeneration.js';
 
 const app = express();
 // Every deployment target (Vercel, Render, ...) terminates TLS at its own
@@ -45,6 +46,16 @@ app.use((_req, _res, next) => {
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+/**
+ * Per-model rate-limit headroom for the Groq pool — not a secret, so
+ * this is a diagnostics endpoint like /health rather than behind
+ * requireAuth. Answers "is the model pool actually helping" without
+ * digging through logs.
+ */
+app.get('/llm-status', (_req, res) => {
+  res.json({ models: llmPoolStatus() ?? [] });
 });
 
 app.use('/auth', authRouter);

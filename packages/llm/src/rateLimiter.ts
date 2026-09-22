@@ -45,6 +45,25 @@ export class TokenBucketRateLimiter {
       await sleep(Math.min(waitMs, 5000)); // recheck at least every 5s
     }
   }
+
+  /**
+   * How long a `reserve(amount)` call would have to wait right now,
+   * without actually reserving anything. Lets a caller compare several
+   * limiters (e.g. one per model in a pool) and pick the least busy one
+   * before committing to it.
+   */
+  peekWaitMs(amount: number): number {
+    this.refill();
+    if (this.tokens >= amount) return 0;
+    const deficit = amount - this.tokens;
+    return Math.ceil((deficit / (this.tokensPerMinute / 60)) * 1000);
+  }
+
+  /** Current headroom, for surfacing in status/diagnostics endpoints. */
+  snapshot(): { available: number; capacity: number } {
+    this.refill();
+    return { available: Math.floor(this.tokens), capacity: this.maxBucket };
+  }
 }
 
 export function sleep(ms: number): Promise<void> {

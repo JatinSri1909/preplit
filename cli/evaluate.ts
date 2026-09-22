@@ -31,7 +31,12 @@ import {
   ErrorCodes,
   runPipeline,
 } from '@prep-kit/core';
-import { GroqClient } from '@prep-kit/llm';
+import { GroqModelPool } from '@prep-kit/llm';
+
+// Kept in sync with apps/api/src/services/kitGeneration.ts's default —
+// see that file for why pooling several models helps the "5 cases within
+// 15 minutes, including retries rate limits force" requirement (Section 9).
+const DEFAULT_MODEL_POOL = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'];
 
 interface Args {
   input: string;
@@ -65,7 +70,13 @@ async function main() {
   }
   const tokensPerMinute = process.env.GROQ_TPM_BUDGET ? Number(process.env.GROQ_TPM_BUDGET) : undefined;
   const requestsPerMinute = process.env.GROQ_RPM_BUDGET ? Number(process.env.GROQ_RPM_BUDGET) : undefined;
-  const llm = new GroqClient({ apiKey, model: process.env.GROQ_MODEL, tokensPerMinute, requestsPerMinute });
+  const models = process.env.GROQ_MODEL_POOL
+    ? process.env.GROQ_MODEL_POOL.split(',').map((m) => m.trim()).filter(Boolean)
+    : [process.env.GROQ_MODEL ?? DEFAULT_MODEL_POOL[0]];
+  const llm = new GroqModelPool({
+    apiKey,
+    models: models.map((model) => ({ model, tokensPerMinute, requestsPerMinute })),
+  });
   const allowPrivateHosts = process.env.ALLOW_PRIVATE_HOSTS === 'true';
 
   const results: BatchKitResult[] = [];

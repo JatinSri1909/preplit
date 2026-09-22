@@ -75,14 +75,37 @@ kicks in under `VERCEL=1`.
 
 ## LLM provider
 
-Groq, model `llama-3.3-70b-versatile` (overridable via `GROQ_MODEL`).
-Chosen for a genuine free tier, OpenAI-compatible JSON-mode output (removes
-most of the "the model wrapped its JSON in prose" failure class outright),
-and noticeably more consistent response quality/latency than Gemini's
-free-tier endpoint, which was the original choice before this switch.
-Free-tier tokens-per-minute limits vary by model — see
-https://console.groq.com/docs/rate-limits — and are self-limited against
-via `GROQ_TPM_BUDGET`.
+Groq. Chosen for a genuine free tier, OpenAI-compatible JSON-mode output
+(removes most of the "the model wrapped its JSON in prose" failure class
+outright), and noticeably more consistent response quality/latency than
+Gemini's free-tier endpoint, which was the original choice before this
+switch.
+
+### Model pool, not one model
+
+Groq's free-tier rate limits are per model, not per account — as of
+writing, `openai/gpt-oss-120b`, `qwen/qwen3.8-27b` and `openai/gpt-oss-20b`
+each get their own 30 RPM / 8K TPM budget (see
+[console.groq.com/docs/rate-limits](https://console.groq.com/docs/rate-limits)).
+A dozen-plus LLM calls per kit against a single model's cap is exactly the
+"provider says slow down" failure the brief warns about, so
+`GroqModelPool` (`packages/llm/src/groqModelPool.ts`) spreads calls across
+several models instead:
+
+- Each call goes to whichever model has self-imposed budget headroom
+  *right now* (`GroqClient.estimatedWaitMs`, checked without reserving
+  anything) — not always the most-preferred one. Ties go to preference
+  order, so the best model still wins whenever nothing is actually busy.
+- If a model still gets a real 429 after its own retry budget, it sits
+  out for 60s and the call falls over to the next model in the pool —
+  a rate limit becomes a fallback, not an error surfaced to the user.
+- `GET /llm-status` reports each model's live headroom and cooldown
+  state, so "is the pool actually helping" is a request away rather than
+  a guess from the logs.
+
+`GROQ_MODEL_POOL` (comma-separated) configures the pool; a single
+`GROQ_MODEL` still works with no fallback, for anyone who'd rather pin one
+model. See `.env.example`.
 
 ## High-level architecture
 

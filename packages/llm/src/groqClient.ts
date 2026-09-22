@@ -18,6 +18,16 @@ export interface GroqClientOptions {
    * separately from tokensPerMinute. Override via GROQ_RPM_BUDGET.
    */
   requestsPerMinute?: number;
+  /**
+   * How many times a single request retries on a transient/rate-limit
+   * error before giving up, and the cap on each backoff delay. Defaults
+   * assume this is the only model available, so it's worth waiting out a
+   * full rate-limit window. A pool of several models passes tighter
+   * values here — see groqModelPool.ts — since falling over to another
+   * model is faster than one model's own backoff loop.
+   */
+  maxRetries?: number;
+  maxRetryDelayMs?: number;
 }
 
 function isRateLimitError(err: unknown): boolean {
@@ -49,6 +59,8 @@ export class GroqClient implements LlmClient {
   private readonly modelName: string;
   private readonly tokenLimiter: TokenBucketRateLimiter;
   private readonly requestLimiter: TokenBucketRateLimiter;
+  private readonly maxRetries: number;
+  private readonly maxRetryDelayMs: number;
 
   constructor(opts: GroqClientOptions) {
     // Our own rateLimiter + retryWithBackoff already handle pacing and
@@ -58,6 +70,37 @@ export class GroqClient implements LlmClient {
     this.modelName = opts.model ?? 'llama-3.3-70b-versatile';
     this.tokenLimiter = new TokenBucketRateLimiter(opts.tokensPerMinute ?? 6000);
     this.requestLimiter = new TokenBucketRateLimiter(opts.requestsPerMinute ?? 28);
+    this.maxRetries = opts.maxRetries ?? 6;
+    this.maxRetryDelayMs = opts.maxRetryDelayMs ?? 30000;
+  }
+
+  /** Which model this client calls — lets a pool identify/log its members. */
+  get model(): string {
+    return this.modelName;
+  }
+
+  /**
+   * How long `generateJson` would currently have to wait on this model's
+   * self-imposed budget before it could even send the request — without
+   * reserving anything. A pool uses this to route each call to whichever
+   * model has headroom right now, rather than always queuing behind the
+   * most-preferred one.
+   */
+  estimatedWaitMs(req: LlmJsonRequest): number {
+    const estimate = req.estimatedInputTokens ?? Math.ceil((req.system.length + req.user.length) / 4);
+    return Math.max(
+      this.tokenLimiter.peekWaitMs(estimate + (req.maxOutputTokens ?? 1024)),
+      this.requestLimiter.peekWaitMs(1),
+    );
+  }
+
+  /** Current budget headroom, for a status/diagnostics endpoint. */
+  snapshot(): { model: string; tokens: { available: number; capacity: number }; requests: { available: number; capacity: number } } {
+    return {
+      model: this.modelName,
+      tokens: this.tokenLimiter.snapshot(),
+      requests: this.requestLimiter.snapshot(),
+    };
   }
 
   async generateJson<T>(req: LlmJsonRequest): Promise<T> {
@@ -98,13 +141,15 @@ export class GroqClient implements LlmClient {
 
     let result;
     try {
-      // maxRetries=6 + a retry-after-aware delay gives enough cumulative
-      // wait to ride out a full 60s rate-limit window, not just a couple of
-      // short exponential hops that give up before the window resets.
+      // A retry-after-aware delay, up to maxRetries, gives enough
+      // cumulative wait to ride out a full 60s rate-limit window when
+      // this is the only model available. In a pool, these are tightened
+      // so a stuck model fails over to the next one quickly instead of
+      // camping on its own backoff loop — see groqModelPool.ts.
       result = await retryWithBackoff(call, isTransientError, {
-        maxRetries: 6,
+        maxRetries: this.maxRetries,
         baseDelayMs: 1000,
-        maxDelayMs: 30000,
+        maxDelayMs: this.maxRetryDelayMs,
         getDelayMs: retryAfterMs,
       });
     } catch (err) {
