@@ -30,6 +30,18 @@
   textarea {
     field-sizing: content;
   }
+
+  /*
+   * SmoothCursor (components/SmoothCursor.tsx) hides the native pointer
+   * everywhere by setting body { cursor: none }, which text fields would
+   * otherwise inherit — leaving no affordance that they're editable.
+   * A visible text-caret cursor there is worth the one exception.
+   */
+  input,
+  textarea,
+  select {
+    cursor: text;
+  }
 }
 
 @layer components {

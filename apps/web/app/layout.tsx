@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import { AppHeader } from '../components/AppHeader';
+import { SmoothCursor } from '../components/SmoothCursor';
 
 export const metadata: Metadata = {
   title: 'Preplit',
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="app-backdrop min-h-screen font-sans text-ink antialiased">
         <div aria-hidden className="grid-backdrop" />
+        <SmoothCursor />
         <Providers>
           <a href="#main" className="skip-link">
             Skip to content
