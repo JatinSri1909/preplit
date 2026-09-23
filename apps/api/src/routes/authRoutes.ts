@@ -23,7 +23,21 @@ authRouter.post(
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await User.create({ email, passwordHash });
+    let user;
+    try {
+      user = await User.create({ email, passwordHash });
+    } catch (err) {
+      // The findOne check above is a check-then-act race: two concurrent
+      // registrations for the same email can both pass it before either
+      // insert lands, and the second insert then hits the unique index.
+      // That's the ordinary "email taken" case racing with itself, not an
+      // internal error — report it the same way, not as a raw 500.
+      if ((err as { code?: number }).code === 11000) {
+        res.status(409).json({ error: { code: 'EMAIL_TAKEN', message: 'An account with this email already exists.' } });
+        return;
+      }
+      throw err;
+    }
 
     req.session = { userId: user.id };
     res.status(201).json({ id: user.id, email: user.email });

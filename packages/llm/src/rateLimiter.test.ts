@@ -31,4 +31,9 @@ describe('TokenBucketRateLimiter', () => {
     // Now fully drained.
     expect(limiter.peekWaitMs(1)).toBeGreaterThan(0);
   });
+
+  it('reserve() rejects immediately instead of hanging forever when the request exceeds bucket capacity', async () => {
+    const limiter = new TokenBucketRateLimiter(6000);
+    await expect(limiter.reserve(6001)).rejects.toThrow(RangeError);
+  });
 });

@@ -4,7 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { PIPELINE_STEPS, PIPELINE_STEP_LABELS, type PipelineStep } from '@prep-kit/core';
+// From the client-safe subpath, not '@prep-kit/core' itself — that barrel
+// also re-exports the retrieval layer (Node's dns/net, arbitrary fetches),
+// which must never end up in the browser bundle.
+import { PIPELINE_STEPS, PIPELINE_STEP_LABELS, type PipelineStep } from '@prep-kit/core/client';
 import { kits } from '../lib/api';
 import { useKit } from '../lib/useKit';
 import { BriefSection, RoleSection, FlashcardsSection, ScheduleSection } from './KitSections';
@@ -20,6 +23,17 @@ const SECTIONS = [
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number][0];
+
+// Defence in depth: the API rejects non-http(s) company_url values on
+// create, but a kit stored before that check existed could still have one,
+// and this is a raw string rendered straight into an <a href> below.
+function isHttpUrl(value: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
 
 // One glance-able glyph per section, so the nav reads as a row of places
 // rather than a row of labels — purely wayfinding, so it takes the same
@@ -116,14 +130,18 @@ export function KitBuilder({ kitId }: { kitId: string }) {
           {kit.source.company_url && (
             <>
               {' · '}
-              <a
-                href={kit.source.company_url}
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-accent"
-              >
-                {kit.source.company_url}
-              </a>
+              {isHttpUrl(kit.source.company_url) ? (
+                <a
+                  href={kit.source.company_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-accent"
+                >
+                  {kit.source.company_url}
+                </a>
+              ) : (
+                kit.source.company_url
+              )}
             </>
           )}
         </p>

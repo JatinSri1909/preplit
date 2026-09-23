@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { Error as MongooseError } from 'mongoose';
 import { validateKit } from '@prep-kit/core';
 import { KitDocument, KitDocumentData } from '../db/models/KitDocument.js';
 import { assertOwnsKit, ForbiddenError } from './ownership.js';
@@ -45,6 +46,37 @@ export async function requireOwnedKit(
 }
 
 /**
+ * Save a kit document, translating a concurrent-edit conflict into a 409
+ * instead of either silently overwriting someone else's write or letting a
+ * raw VersionError fall through to the generic 500 handler.
+ *
+ * `kit`/`meta`/`practice` are opaque Mixed blobs, read-then-mutated-then-
+ * saved by every route below — the KitDocument schema enables
+ * optimisticConcurrency specifically so a second save() targeting a
+ * document that changed since it was read fails loudly rather than
+ * clobbering the first save.
+ */
+export async function saveKitDocument(doc: KitDocumentData, res: Response): Promise<boolean> {
+  try {
+    await doc.save();
+    return true;
+  } catch (err) {
+    if (err instanceof MongooseError.VersionError) {
+      // There is no way to merge two edits to an opaque Mixed blob — telling
+      // the client to reload and retry is the only honest option.
+      res.status(409).json({
+        error: {
+          code: 'CONFLICT',
+          message: 'This kit was changed elsewhere while you were editing. Reload and try again.',
+        },
+      });
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
  * Persist a kit edit, refusing the save if the edit would break Appendix A.
  *
  * The brief asks for a kit validated "against the expected structure
@@ -71,6 +103,5 @@ export async function saveValidatedKit(
   doc.markModified('kit');
   doc.markModified('meta');
   doc.markModified('practice');
-  await doc.save();
-  return true;
+  return saveKitDocument(doc, res);
 }

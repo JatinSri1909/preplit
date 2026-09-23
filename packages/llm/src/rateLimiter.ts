@@ -34,6 +34,13 @@ export class TokenBucketRateLimiter {
   }
 
   async reserve(estimatedTokens: number): Promise<void> {
+    if (estimatedTokens > this.maxBucket) {
+      // refill() caps `tokens` at maxBucket, so the loop below would never
+      // see enough budget and would await forever — fail fast instead.
+      throw new RangeError(
+        `Cannot reserve ${estimatedTokens} tokens: exceeds this limiter's bucket capacity of ${this.maxBucket}.`,
+      );
+    }
     for (;;) {
       this.refill();
       if (this.tokens >= estimatedTokens) {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   initialMetaFor,
   markEdited,
@@ -6,7 +6,6 @@ import {
   mergeRegeneratedQuestions,
   mergeRegeneratedFlashcards,
   mergeRegeneratedBrief,
-  resetIdCounterForTests,
   nextItemId,
   forgetItem,
 } from './kitState.js';
@@ -19,8 +18,6 @@ function q(id: string, category: Question['category'] = 'technical'): Question {
 function f(id: string): Flashcard {
   return { id, front: `front ${id}`, back: `back ${id}`, requirement_ids: ['r1'] };
 }
-
-beforeEach(() => resetIdCounterForTests());
 
 describe('mergeRegeneratedQuestions', () => {
   it('replaces generated questions in the target category with fresh ones', () => {

@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { validateFetchUrl } from './urlSafety.js';
+import { fetchValidated } from './urlSafety.js';
 
 /**
  * Retrieval layer, half of the split the brief asks for (Section 3):
@@ -53,21 +53,11 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<F
     userAgent = DEFAULT_USER_AGENT,
   } = opts;
 
-  const validated = validateFetchUrl(url, allowPrivateHosts);
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  let response: Response;
-  try {
-    response = await fetch(validated.toString(), {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { 'User-Agent': userAgent, Accept: 'text/html,application/xhtml+xml' },
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  const { response, finalUrl: validated } = await fetchValidated(url, {
+    allowPrivateHosts,
+    timeoutMs,
+    headers: { 'User-Agent': userAgent, Accept: 'text/html,application/xhtml+xml' },
+  });
 
   const contentType = response.headers.get('content-type');
   const isHtml = !contentType || /text\/html|application\/xhtml\+xml/i.test(contentType);

@@ -1,4 +1,4 @@
-import { validateFetchUrl } from './urlSafety.js';
+import { fetchValidated } from './urlSafety.js';
 
 /**
  * Minimal robots.txt support (brief Section 2: "Respect robots.txt and
@@ -17,27 +17,20 @@ export async function fetchRobotsRules(
   origin: string,
   opts: { allowPrivateHosts?: boolean; timeoutMs?: number } = {},
 ): Promise<RobotsRules> {
-  let robotsUrl: URL;
   try {
-    robotsUrl = validateFetchUrl(new URL('/robots.txt', origin).toString(), opts.allowPrivateHosts);
-  } catch {
-    return EMPTY_RULES;
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000);
-  try {
-    const res = await fetch(robotsUrl.toString(), { signal: controller.signal });
-    if (!res.ok) return EMPTY_RULES;
-    const body = await res.text();
+    const { response } = await fetchValidated(new URL('/robots.txt', origin).toString(), {
+      allowPrivateHosts: opts.allowPrivateHosts,
+      timeoutMs: opts.timeoutMs ?? 5000,
+    });
+    if (!response.ok) return EMPTY_RULES;
+    const body = await response.text();
     return parseRobotsTxt(body);
   } catch {
-    // Unreachable/malformed robots.txt: fail open with no rules rather than
-    // blocking the whole crawl over a missing file (most sites don't have
-    // one, and that is not itself a disallow signal).
+    // Unreachable/malformed robots.txt (including an unsafe or excessive
+    // redirect, rejected by fetchValidated): fail open with no rules rather
+    // than blocking the whole crawl over a missing file (most sites don't
+    // have one, and that is not itself a disallow signal).
     return EMPTY_RULES;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

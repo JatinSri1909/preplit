@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { waitUntil } from '@vercel/functions';
 import { runPipeline, validateKit, initialMetaFor } from '@prep-kit/core';
 import { GroqModelPool, type LlmClient } from '@prep-kit/llm';
 import { KitDocument } from '../db/models/KitDocument.js';
@@ -101,7 +102,13 @@ export async function startKitGeneration(userId: string, input: KitInput): Promi
     fingerprint: fingerprint(userId, input),
   });
 
-  void runInBackground(doc.id, input);
+  // On Vercel, a standard Node serverless invocation is frozen as soon as
+  // the HTTP response is flushed — it does not wait for unrelated pending
+  // promises the way a long-running process would. waitUntil() is Vercel's
+  // hook for "keep this invocation alive until this promise settles too";
+  // it's a no-op (falls back to plain fire-and-forget) on every other
+  // deployment target, where the long-lived process makes it unnecessary.
+  waitUntil(runInBackground(doc.id, input));
   return doc.id;
 }
 

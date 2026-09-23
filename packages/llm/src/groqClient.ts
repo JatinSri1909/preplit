@@ -47,8 +47,11 @@ function isTransientError(err: unknown): boolean {
  * exponential backoff formula.
  */
 function retryAfterMs(err: unknown): number | undefined {
-  const headers = (err as { headers?: { get?(name: string): string | null } })?.headers;
-  const raw = headers?.get?.('retry-after');
+  // groq-sdk's APIError exposes `headers` as a plain object (built via
+  // Object.fromEntries over the fetch Response's Headers), not a
+  // fetch-style Headers instance — it has no `.get` method.
+  const headers = (err as { headers?: Record<string, string> })?.headers;
+  const raw = headers?.['retry-after'];
   if (!raw) return undefined;
   const seconds = Number(raw);
   return Number.isFinite(seconds) ? Math.ceil(seconds * 1000) + 250 : undefined;

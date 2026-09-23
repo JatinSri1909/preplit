@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { orderPracticeQueue, practiceProgress, recordReview } from '@prep-kit/core';
-import { requireOwnedKit } from './loadKit.js';
+import { requireOwnedKit, saveKitDocument } from './loadKit.js';
 import { asyncHandler } from './asyncHandler.js';
 
 /**
@@ -59,7 +59,7 @@ practiceRouter.post(
 
     doc.practice = recordReview(doc.practice ?? {}, fid, parsed.data.confidence);
     doc.markModified('practice');
-    await doc.save();
+    if (!(await saveKitDocument(doc, res))) return;
 
     // No queue reorder in the response: resorting mid-session would move
     // the card under the user's cursor. The client finishes the session
@@ -80,7 +80,7 @@ practiceRouter.delete(
 
     doc.practice = {};
     doc.markModified('practice');
-    await doc.save();
+    if (!(await saveKitDocument(doc, res))) return;
 
     res.json({
       state: {},

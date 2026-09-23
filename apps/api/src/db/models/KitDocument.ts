@@ -47,7 +47,12 @@ const kitDocumentSchema = new Schema<KitDocumentData>(
     input: { type: Schema.Types.Mixed, required: true },
     fingerprint: { type: String, required: true, index: true },
   },
-  { timestamps: true },
+  // Builder edits are read-then-mutate-then-save on this whole document, and
+  // `kit`/`meta`/`practice` are plain Mixed blobs rather than arrays, so
+  // Mongoose's default versioning wouldn't otherwise catch two concurrent
+  // saves clobbering each other — this makes save() reject with a
+  // VersionError instead (see loadKit.ts's saveValidatedKit).
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 export const KitDocument = model<KitDocumentData>('KitDocument', kitDocumentSchema);

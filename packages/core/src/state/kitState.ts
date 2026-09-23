@@ -66,30 +66,13 @@ export function markUserAdded(meta: KitMeta, kind: 'questions' | 'flashcards', i
   };
 }
 
-let idCounter = 0;
-/** Deterministic-enough fresh id generator for newly generated replacement items. Tests can seed/reset via resetIdCounterForTests. */
-function nextId(prefix: string, existingIds: Set<string>): string {
-  let candidate: string;
-  do {
-    idCounter += 1;
-    candidate = `${prefix}${existingIds.size + idCounter}`;
-  } while (existingIds.has(candidate));
-  return candidate;
-}
-
-export function resetIdCounterForTests(): void {
-  idCounter = 0;
-}
-
 /**
- * Mint the next id for a hand-added item ("q7", "f3").
+ * Mint the next id for a hand-added or freshly regenerated item ("q7", "f3").
  *
- * Deliberately NOT the `nextId` above: that one leans on a module-level
- * counter, which is fine inside a single regeneration call but wrong for a
- * long-lived API process where two requests against different kits would
- * interleave and drift. This one derives purely from the ids already in
- * the kit, so the same kit state always yields the same next id — which
- * also makes it testable without resetting global state.
+ * Derives purely from the ids already in the kit, so the same kit state
+ * always yields the same next id — unlike a module-level counter, which
+ * would be wrong for a long-lived API process where requests against
+ * different kits (or concurrent regenerations) interleave and drift.
  */
 export function nextItemId(prefix: string, existingIds: Iterable<string>): string {
   let highest = 0;
@@ -143,7 +126,7 @@ export function mergeRegeneratedQuestions(
   }
 
   const added: Question[] = freshQuestions.map((fq) => {
-    const id = nextId('q', existingIds);
+    const id = nextItemId('q', existingIds);
     existingIds.add(id);
     nextMeta.questions[id] = { source: 'generated', updated_at: now };
     return { ...fq, id };
@@ -177,7 +160,7 @@ export function mergeRegeneratedFlashcards(
   }
 
   const added: Flashcard[] = freshFlashcards.map((ff) => {
-    const id = nextId('f', existingIds);
+    const id = nextItemId('f', existingIds);
     existingIds.add(id);
     nextMeta.flashcards[id] = { source: 'generated', updated_at: now };
     return { ...ff, id };

@@ -12,39 +12,15 @@ import { findUncoveredMustHaveIds } from './coverage/checkCoverage.js';
 import { buildSchedule } from './schedule/buildSchedule.js';
 import { summarizeCompany } from './generation/summarizeCompany.js';
 import { validateKit } from './validation/validateKit.js';
+import { PipelineStep } from './pipelineSteps.js';
+
+export { PIPELINE_STEPS, PIPELINE_STEP_LABELS, type PipelineStep } from './pipelineSteps.js';
 
 export interface PipelineInput {
   jd: string;
   companyUrl: string;
   days: number;
 }
-
-/**
- * The steps a caller can observe from the outside, in the order
- * runPipeline actually executes them. Kept to the granularity a human
- * watching a progress list cares about — several internal steps (crawl +
- * company-brief summarisation, schedule build + final validation) are
- * reported under one entry because they're inseparable in wall-clock time.
- */
-export const PIPELINE_STEPS = [
-  'extracting_requirements',
-  'crawling_company_site',
-  'researching_interview_process',
-  'generating_questions',
-  'checking_coverage',
-  'building_schedule',
-] as const;
-
-export type PipelineStep = (typeof PIPELINE_STEPS)[number];
-
-export const PIPELINE_STEP_LABELS: Record<PipelineStep, string> = {
-  extracting_requirements: 'Reading the job description for its requirements',
-  crawling_company_site: 'Crawling the company site for what they do and how they hire',
-  researching_interview_process: 'Looking for public accounts of their interview process',
-  generating_questions: 'Writing questions for each requirement',
-  checking_coverage: 'Checking every must-have has a question, and filling the gaps',
-  building_schedule: 'Laying the material out across your days',
-};
 
 export interface PipelineOptions {
   llm: LlmClient;
