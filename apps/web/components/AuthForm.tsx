@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { auth } from '../lib/api';
+import { useAuth } from '../app/providers';
 import { Button, ErrorNote, Field, inputClass } from './ui';
 
 /**
@@ -15,10 +16,18 @@ import { Button, ErrorNote, Field, inputClass } from './ui';
 export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const isRegister = mode === 'register';
+
+  // An already-signed-in visitor lands here by typing the URL or clicking
+  // back — showing them a sign-in form while the header still says who
+  // they are is a contradiction, not a valid state to render.
+  useEffect(() => {
+    if (!authLoading && user) router.replace('/');
+  }, [authLoading, user, router]);
 
   const submit = useMutation({
     mutationFn: () =>
@@ -28,6 +37,8 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       router.push('/');
     },
   });
+
+  if (authLoading || user) return null;
 
   return (
     <div className="mx-auto max-w-sm px-4 py-12 sm:px-6">
