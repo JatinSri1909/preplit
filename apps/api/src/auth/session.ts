@@ -17,7 +17,7 @@ export function sessionMiddleware() {
     secret,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     httpOnly: true,
-    // Deployed, the web app (Vercel) and the API (Render/Fly) sit on
+    // Deployed, the web app and the API sit on
     // different registrable domains, so every authenticated request from
     // the browser is cross-site. `lax` would silently drop the session
     // cookie on those requests and every protected route would 401.

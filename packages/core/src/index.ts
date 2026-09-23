@@ -15,3 +15,4 @@ export * from './state/kitState.js';
 export * from './pipeline.js';
 export * from './generation/summarizeCompany.js';
 export * from './practice/practiceQueue.js';
+export * from './resume/matchResume.js';

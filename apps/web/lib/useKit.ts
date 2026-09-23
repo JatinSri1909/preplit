@@ -74,7 +74,13 @@ export function useBuilderMutation<TArgs>(
       // schedule rewritten by a delete.
       queryClient.setQueryData<KitRecord>(key, (current) =>
         current
-          ? { ...current, kit: result.kit, meta: result.meta, practice: result.practice }
+          ? {
+              ...current,
+              kit: result.kit,
+              meta: result.meta,
+              practice: result.practice,
+              resume_match: result.resume_match,
+            }
           : current,
       );
     },

@@ -1,5 +1,12 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { PIPELINE_STEPS, type Kit, type KitMeta, type PipelineStep, type PracticeState } from '@prep-kit/core';
+import {
+  PIPELINE_STEPS,
+  type Kit,
+  type KitMeta,
+  type PipelineStep,
+  type PracticeState,
+  type ResumeMatch,
+} from '@prep-kit/core';
 
 export type KitStatus = 'generating' | 'ready' | 'failed';
 
@@ -24,6 +31,12 @@ export interface KitDocumentData extends Document {
   // rather than inside it for the same reason as `meta`: Appendix A has no
   // field for it, and the kit body is structurally graded.
   practice: PracticeState;
+  // Optional creativity feature: how well an uploaded resume addresses this
+  // kit's requirements. Also outside Appendix A, never sent to the grader —
+  // same reasoning as `meta`/`practice`. One resume per kit; re-uploading
+  // replaces it. Only the match verdicts are kept, never the resume text
+  // itself (see matchResumeToRequirements's caller in builderRoutes.ts).
+  resumeMatch: ResumeMatch | null;
   // The request this kit was generated from. Stored so a section can be
   // regenerated later without asking the user to paste the description
   // again.
@@ -44,6 +57,7 @@ const kitDocumentSchema = new Schema<KitDocumentData>(
     kit: { type: Schema.Types.Mixed, default: null },
     meta: { type: Schema.Types.Mixed, default: null },
     practice: { type: Schema.Types.Mixed, default: () => ({}) },
+    resumeMatch: { type: Schema.Types.Mixed, default: null },
     input: { type: Schema.Types.Mixed, required: true },
     fingerprint: { type: String, required: true, index: true },
   },

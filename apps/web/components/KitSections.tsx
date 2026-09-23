@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import type { Kit, KitMeta } from '@prep-kit/core';
+import type { Kit, KitMeta, ResumeMatch } from '@prep-kit/core';
 import { builder } from '../lib/api';
 import { useBuilderMutation } from '../lib/useKit';
 import { EditableText } from './EditableText';
 import { ProvenanceMark } from './ProvenanceMark';
 import { CATEGORY_COLORS } from './QuestionsSection';
-import { Button, EmptyState, ErrorNote, inputClass } from './ui';
+import { Button, EmptyState, ErrorNote, Field, Spinner, inputClass } from './ui';
 
 // --- company brief ---
 
@@ -399,5 +399,109 @@ export function ScheduleSection({ kitId, kit }: { kitId: string; kit: Kit }) {
         ))}
       </ol>
     </section>
+  );
+}
+
+// --- resume match (optional creativity feature) ---
+
+export function ResumeSection({
+  kitId,
+  kit,
+  resumeMatch,
+}: {
+  kitId: string;
+  kit: Kit;
+  resumeMatch: ResumeMatch | null;
+}) {
+  const upload = useBuilderMutation(kitId, (file: File) => builder.uploadResume(kitId, file));
+
+  return (
+    <section aria-labelledby="resume-heading" className="space-y-4">
+      <h2 id="resume-heading" className="font-read text-xl">
+        Resume match
+      </h2>
+
+      <Field
+        label={resumeMatch ? 'Re-upload a resume' : 'Upload a resume'}
+        htmlFor="resume-upload"
+        hint="PDF only. Only the match result is kept — the resume text itself is never stored."
+      >
+        <input
+          id="resume-upload"
+          type="file"
+          accept="application/pdf,.pdf"
+          aria-describedby="resume-upload-hint"
+          disabled={upload.isPending}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) upload.mutate(file);
+            e.target.value = '';
+          }}
+          className="block w-full text-sm text-muted file:mr-3 file:rounded file:border file:border-rule file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink"
+        />
+      </Field>
+
+      <ErrorNote error={upload.error} />
+      {upload.isPending && <Spinner label="Reading the resume and comparing it against the role" />}
+
+      {!resumeMatch ? (
+        <EmptyState
+          title="No resume uploaded yet"
+          description="Upload a PDF resume to see how well it addresses this role's must-have requirements, and what's missing."
+        />
+      ) : resumeMatch.score === null ? (
+        <EmptyState
+          title="Nothing to score"
+          description="This posting has no must-have requirements to check a resume against."
+        />
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-rule bg-surface p-4 shadow-soft">
+            <p className="font-read text-2xl">{resumeMatch.score}% match</p>
+            <p className="text-sm text-muted">
+              {resumeMatch.must_matched} of {resumeMatch.must_total} must-have requirement
+              {resumeMatch.must_total === 1 ? '' : 's'} found in this resume.
+            </p>
+          </div>
+
+          <ResumeRequirementList kit={kit} resumeMatch={resumeMatch} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResumeRequirementList({ kit, resumeMatch }: { kit: Kit; resumeMatch: ResumeMatch }) {
+  const byId = new Map(resumeMatch.results.map((r) => [r.requirement_id, r]));
+
+  return (
+    <ul className="space-y-1.5">
+      {kit.role.requirements.map((r) => {
+        const verdict = byId.get(r.id);
+        const matched = verdict?.matched ?? false;
+        return (
+          <li
+            key={r.id}
+            className={`border bg-surface px-3 py-2 transition-colors ${
+              matched ? 'border-rule' : 'border-rule border-l-4 border-l-gap'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <span className="max-w-read flex-1 font-read leading-relaxed">{r.text}</span>
+              {matched ? (
+                <span className="ml-auto shrink-0 text-xs text-covered">found in resume</span>
+              ) : (
+                <span className="ml-auto shrink-0 rounded bg-gap-soft px-2 py-0.5 text-xs font-medium text-gap">
+                  not found
+                </span>
+              )}
+            </div>
+            {!matched && verdict?.note && (
+              <p className="mt-1.5 max-w-read text-sm text-muted">{verdict.note}</p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -1,4 +1,12 @@
-import type { Kit, KitMeta, PipelineStep, PracticeState, PracticeProgress, Flashcard } from '@prep-kit/core';
+import type {
+  Kit,
+  KitMeta,
+  PipelineStep,
+  PracticeState,
+  PracticeProgress,
+  Flashcard,
+  ResumeMatch,
+} from '@prep-kit/core';
 
 /**
  * The only place in the web app that knows the API exists.
@@ -37,7 +45,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       // if this is set on every single request.
       credentials: 'include',
       headers: {
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        // A FormData body (a resume upload) must not get this header —
+        // the browser sets its own multipart boundary, and overriding it
+        // breaks the upload.
+        ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
       },
     });
@@ -106,6 +117,7 @@ export interface KitRecord {
   kit: Kit | null;
   meta: KitMeta | null;
   practice: PracticeState;
+  resume_match: ResumeMatch | null;
   input: { jd: string; company_url: string; days: number };
 }
 
@@ -151,6 +163,7 @@ export interface BuilderResult {
   kit: Kit;
   meta: KitMeta;
   practice: PracticeState;
+  resume_match: ResumeMatch | null;
 }
 
 const builderRequest = (id: string, path: string, init: RequestInit) =>
@@ -202,6 +215,12 @@ export const builder = {
       method: 'POST',
       body: JSON.stringify(days ? { days } : {}),
     }),
+
+  uploadResume: (id: string, file: File) => {
+    const body = new FormData();
+    body.append('resume', file);
+    return builderRequest(id, '/resume', { method: 'POST', body });
+  },
 };
 
 // --- practice ---

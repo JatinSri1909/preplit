@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PIPELINE_STEPS, PIPELINE_STEP_LABELS, type PipelineStep } from '@prep-kit/core/client';
 import { kits } from '../lib/api';
 import { useKit } from '../lib/useKit';
-import { BriefSection, RoleSection, FlashcardsSection, ScheduleSection } from './KitSections';
+import { BriefSection, RoleSection, FlashcardsSection, ScheduleSection, ResumeSection } from './KitSections';
 import { QuestionsSection } from './QuestionsSection';
 import { Button, ErrorNote, LoadingRows, Spinner } from './ui';
 
@@ -20,6 +20,7 @@ const SECTIONS = [
   ['questions', 'Questions'],
   ['flashcards', 'Flashcards'],
   ['schedule', 'Schedule'],
+  ['resume', 'Resume match'],
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number][0];
@@ -44,6 +45,7 @@ const SECTION_ICONS: Record<SectionId, string> = {
   questions: 'M12 17.5v.01M12 14c0-1.5 1.6-1.7 2.3-2.9.6-1 .2-2.6-1-3.3-1.1-.6-2.6-.4-3.4.6|M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 3v-3H6a2 2 0 0 1-2-2Z',
   flashcards: 'M4 8a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z|M8.5 4h9a2 2 0 0 1 2 2v9',
   schedule: 'M4 9h16M7 3v4M17 3v4|M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z',
+  resume: 'M6 3h7l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z|m8.5 13.5 2.5 2.5 5-5',
 };
 
 function SectionIcon({ id, className }: { id: SectionId; className?: string }) {
@@ -194,6 +196,9 @@ export function KitBuilder({ kitId }: { kitId: string }) {
         {section === 'questions' && <QuestionsSection kitId={kitId} kit={kit} meta={meta} />}
         {section === 'flashcards' && <FlashcardsSection kitId={kitId} kit={kit} meta={meta} />}
         {section === 'schedule' && <ScheduleSection kitId={kitId} kit={kit} />}
+        {section === 'resume' && (
+          <ResumeSection kitId={kitId} kit={kit} resumeMatch={data.resume_match} />
+        )}
       </div>
     </div>
   );

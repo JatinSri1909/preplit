@@ -192,6 +192,7 @@ kitsRouter.get(
       kit: doc.kit,
       meta: doc.meta,
       practice: doc.practice ?? {},
+      resume_match: doc.resumeMatch ?? null,
       input: doc.input,
       created_at: doc.createdAt,
       updated_at: doc.updatedAt,

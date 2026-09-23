@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import multer from 'multer';
+import { PDFParse } from 'pdf-parse';
 import { z } from 'zod';
 import {
   buildSchedule,
@@ -10,13 +12,14 @@ import {
   mergeRegeneratedQuestions,
   mergeRegeneratedBrief,
   generateQuestionsForRequirement,
+  matchResumeToRequirements,
   summarizeCompany,
   crawlSite,
   type Question,
   type Flashcard,
   type QuestionCategory,
 } from '@prep-kit/core';
-import { requireOwnedKit, saveValidatedKit } from './loadKit.js';
+import { requireOwnedKit, saveKitDocument, saveValidatedKit } from './loadKit.js';
 import type { KitDocumentData } from '../db/models/KitDocument.js';
 import { asyncHandler } from './asyncHandler.js';
 import { llmClient } from '../services/kitGeneration.js';
@@ -443,6 +446,119 @@ builderRouter.post(
   }),
 );
 
+// --- resume match (optional creativity feature) ---
+//
+// Not part of the graded Kit shape (see resumeMatch's own comment on
+// KitDocumentData) — it never touches doc.kit, so this uses saveKitDocument
+// rather than saveValidatedKit; there is nothing new to structurally
+// validate.
+const uploadResume = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('INVALID_FILE_TYPE'));
+  },
+});
+
+// Resume text sent to the model, capped to stay well under this app's
+// configured per-model token bucket (GROQ_TPM_BUDGET, 6000 by default) once
+// the system prompt and a fully-loaded requirement list are added on top —
+// see matchResume.ts's system prompt for the rest of that budget.
+const RESUME_TEXT_CHAR_CAP = 6_000;
+
+builderRouter.post(
+  '/resume',
+  // Multer's own rejections (oversized file, wrong mimetype) call
+  // Express's next(err) directly from callback-style middleware, before
+  // asyncHandler's promise-based wrapper ever runs — left alone, that raw
+  // error would reach the global handler's unconditional `message:
+  // err.message` and leak internal detail. Translate it here instead.
+  (req, res, next) => {
+    uploadResume.single('resume')(req, res, (err: unknown) => {
+      if (!err) return next();
+      const message = err instanceof Error ? err.message : String(err);
+      const code =
+        message === 'INVALID_FILE_TYPE'
+          ? 'INVALID_FILE_TYPE'
+          : (err as { code?: string }).code === 'LIMIT_FILE_SIZE'
+            ? 'FILE_TOO_LARGE'
+            : 'INVALID_FILE';
+      const friendly =
+        code === 'INVALID_FILE_TYPE'
+          ? 'Only PDF resumes are supported.'
+          : code === 'FILE_TOO_LARGE'
+            ? 'That file is too large — resumes must be under 4MB.'
+            : 'Could not read that upload.';
+      res.status(400).json({ error: { code, message: friendly } });
+    });
+  },
+  asyncHandler(async (req, res) => {
+    const doc = await requireOwnedKit(req, res);
+    if (!doc) return;
+
+    if (!req.file) {
+      res.status(400).json({ error: { code: 'NO_FILE_UPLOADED', message: 'Attach a PDF resume.' } });
+      return;
+    }
+
+    let text: string;
+    const parser = new PDFParse({ data: req.file.buffer });
+    try {
+      text = (await parser.getText()).text.trim();
+    } catch {
+      res.status(400).json({
+        error: {
+          code: 'RESUME_UNREADABLE',
+          message: "Couldn't read that PDF — try re-exporting it and uploading again.",
+        },
+      });
+      return;
+    } finally {
+      await parser.destroy();
+    }
+
+    if (text.length < 50) {
+      res.status(400).json({
+        error: {
+          code: 'RESUME_UNREADABLE',
+          message:
+            "Couldn't find readable text in that PDF — it may be a scanned image. Export from your word processor instead.",
+        },
+      });
+      return;
+    }
+
+    // The extracted text itself is never persisted — only the match
+    // verdicts below are. Truncating (rather than rejecting) a resume past
+    // the cap is deliberate: a few extra pages of extraction noise from an
+    // unusual template shouldn't fail an otherwise-real resume outright.
+    text = text.slice(0, RESUME_TEXT_CHAR_CAP);
+
+    let match;
+    try {
+      match = await matchResumeToRequirements(doc.kit!.role.requirements, text, llmClient());
+    } catch (err) {
+      // Same sanitization principle as kitGeneration.ts's runInBackground:
+      // the raw error here can be a Zod schema dump or a rate-limiter
+      // RangeError — log the detail server-side, never hand it to the
+      // client.
+      console.error(`Resume match failed for kit ${doc.id}:`, err);
+      res.status(502).json({
+        error: {
+          code: 'RESUME_MATCH_FAILED',
+          message: 'Could not analyse that resume right now — this is usually temporary; try again.',
+        },
+      });
+      return;
+    }
+
+    doc.resumeMatch = match;
+    doc.markModified('resumeMatch');
+    if (await saveKitDocument(doc, res)) res.json(kitPayload(doc));
+  }),
+);
+
 /**
  * Every builder route returns the whole kit rather than just the item it
  * changed. One edit can legitimately touch several places — deleting a
@@ -457,5 +573,6 @@ function kitPayload(doc: KitDocumentData) {
     kit: doc.kit,
     meta: doc.meta,
     practice: doc.practice ?? {},
+    resume_match: doc.resumeMatch ?? null,
   };
 }
