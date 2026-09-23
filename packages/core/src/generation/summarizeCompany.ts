@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LlmClient, wrapUntrustedContent } from '@prep-kit/llm';
 import { CompanyBrief } from '../types/kit.js';
 import { FetchedPage } from '../retrieval/fetchPage.js';
+import { zodValidate } from '../validation/zodValidate.js';
 
 /**
  * Company brief generation.
@@ -77,18 +78,19 @@ export async function summarizeCompany(
   ].join('\n\n');
 
   try {
-    const raw = await llm.generateJson<unknown>({
+    const parsed = await llm.generateJson<z.infer<typeof BriefResponseSchema>>({
       system: SYSTEM_PROMPT,
       user,
       estimatedInputTokens: Math.ceil((SYSTEM_PROMPT.length + user.length) / 4),
       maxOutputTokens: 512,
+      validate: zodValidate(BriefResponseSchema),
     });
-    const parsed = BriefResponseSchema.safeParse(raw);
-    if (!parsed.success) {
-      return { summary: NO_INFORMATION_BRIEF_SUMMARY, what_they_do: '', sources };
-    }
-    return { ...parsed.data, sources };
+    return { ...parsed, sources };
   } catch {
+    // Covers a genuine provider failure and a response that still didn't
+    // match the schema after generateJson's own correction retry — either
+    // way, the documented "always resolves" contract degrades to the
+    // honest no-information brief rather than failing the pipeline.
     return { summary: NO_INFORMATION_BRIEF_SUMMARY, what_they_do: '', sources };
   }
 }

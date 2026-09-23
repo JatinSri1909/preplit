@@ -30,6 +30,25 @@ export interface GroqClientOptions {
   maxRetryDelayMs?: number;
 }
 
+type ParseResult<T> = { ok: true; value: T } | { ok: false; problem: string };
+
+/** Parses `text` as JSON and, if given, runs the caller's shape check on it. */
+function parseAndValidate<T>(text: string, validate?: LlmJsonRequest['validate']): ParseResult<T> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, problem: 'was not valid JSON.' };
+  }
+  if (validate) {
+    const outcome = validate(parsed);
+    if (!outcome.valid) {
+      return { ok: false, problem: `did not match the required shape: ${outcome.message}` };
+    }
+  }
+  return { ok: true, value: parsed as T };
+}
+
 function isRateLimitError(err: unknown): boolean {
   const status = (err as { status?: number })?.status;
   const message = String((err as Error)?.message ?? '');
@@ -108,22 +127,27 @@ export class GroqClient implements LlmClient {
 
   async generateJson<T>(req: LlmJsonRequest): Promise<T> {
     const text = await this.complete(req);
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      // One correction attempt: ask the model to fix its own output.
-      const retryReq: LlmJsonRequest = {
-        system: req.system,
-        user: `Your previous response was not valid JSON. Return ONLY valid JSON, no markdown fences, no commentary. Previous response:\n\n${text}`,
-        maxOutputTokens: req.maxOutputTokens,
-      };
-      try {
-        const fixed = await this.complete(retryReq);
-        return JSON.parse(fixed) as T;
-      } catch {
-        throw new LlmInvalidJsonError(undefined, text);
-      }
-    }
+    const first = parseAndValidate<T>(text, req.validate);
+    if (first.ok) return first.value;
+
+    // One correction attempt: ask the model to fix its own output — same
+    // path whether the problem was invalid JSON syntax or JSON that didn't
+    // match the caller's expected shape (e.g. `difficulty: "2"` instead of
+    // `2`). A schema mismatch is just as recoverable as a syntax error, and
+    // previously wasn't retried at all — it threw immediately.
+    const retryReq: LlmJsonRequest = {
+      system: req.system,
+      user: `Your previous response ${first.problem} Return ONLY valid JSON, no markdown fences, no commentary. Previous response:\n\n${text}`,
+      maxOutputTokens: req.maxOutputTokens,
+    };
+    // Deliberately not wrapped in a catch-and-replace: a genuine failure of
+    // this call (rate limit, provider error) must propagate as itself, not
+    // be masked as LlmInvalidJsonError — the pool's rate-limit failover
+    // (GroqModelPool) only triggers on the real error type.
+    const fixedText = await this.complete(retryReq);
+    const second = parseAndValidate<T>(fixedText, req.validate);
+    if (second.ok) return second.value;
+    throw new LlmInvalidJsonError(second.problem, fixedText);
   }
 
   private async complete(req: LlmJsonRequest): Promise<string> {

@@ -1,5 +1,5 @@
-import { RequireAuth } from '../../../../components/RequireAuth';
-import { PracticeMode } from '../../../../components/PracticeMode';
+import { RequireAuth } from '../../../../modules/auth/components/require-auth';
+import { PracticeMode } from '../../../../modules/practice/components/practice-mode';
 
 export default function PracticePage({ params }: { params: { id: string } }) {
   const { id } = params;

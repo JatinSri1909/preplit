@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
-import { RequireAuth } from '../../../components/RequireAuth';
-import { KitBuilder } from '../../../components/KitBuilder';
-import { LoadingRows } from '../../../components/ui';
+import { RequireAuth } from '../../../modules/auth/components/require-auth';
+import { KitBuilder } from '../../../modules/builder/components/kit-builder';
+import { LoadingRows } from '../../../common/components/ui';
 
 export default function KitPage({ params }: { params: { id: string } }) {
   const { id } = params;

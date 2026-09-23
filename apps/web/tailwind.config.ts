@@ -31,7 +31,11 @@ import type { Config } from 'tailwindcss';
  * each component's own className.
  */
 const config: Config = {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  content: [
+    './app/**/*.{ts,tsx}',
+    './common/**/*.{ts,tsx}',
+    './modules/**/*.{ts,tsx}',
+  ],
   theme: {
     extend: {
       colors: {

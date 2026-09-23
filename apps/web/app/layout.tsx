@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
-import { AppHeader } from '../components/AppHeader';
-import { SmoothCursor } from '../components/SmoothCursor';
+import { AppHeader } from '../common/components/app-header';
+import { SmoothCursor } from '../common/components/smooth-cursor';
 
 export const metadata: Metadata = {
   title: 'Preplit',

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LlmClient, wrapUntrustedContent } from '@prep-kit/llm';
 import { Requirement } from '../types/kit.js';
+import { zodValidate } from '../validation/zodValidate.js';
 
 /**
  * Resume-vs-requirements matching — the optional creativity feature.
@@ -78,17 +79,13 @@ export async function matchResumeToRequirements(
   const system = buildSystemPrompt(requirements);
   const user = wrapUntrustedContent('resume', resumeText);
 
-  const raw = await llm.generateJson<ResumeMatchResponse>({
+  const parsed = await llm.generateJson<ResumeMatchResponse>({
     system,
     user,
     estimatedInputTokens: Math.ceil((system.length + user.length) / 4),
     maxOutputTokens: 1536,
+    validate: zodValidate(ResumeMatchResponseSchema),
   });
-
-  const parsed = ResumeMatchResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error(`matchResumeToRequirements: LLM response failed schema validation: ${parsed.error.message}`);
-  }
 
   // Never trust an id blindly (same defensive posture as validateKit's
   // cross-referential checks) — keep only results for ids that actually
@@ -96,7 +93,7 @@ export async function matchResumeToRequirements(
   // always get exactly one result per requirement.
   const knownIds = new Set(requirements.map((r) => r.id));
   const byId = new Map(
-    parsed.data.results.filter((r) => knownIds.has(r.requirement_id)).map((r) => [r.requirement_id, r]),
+    parsed.results.filter((r) => knownIds.has(r.requirement_id)).map((r) => [r.requirement_id, r]),
   );
 
   const results: ResumeMatchResult[] = requirements.map((r) => {

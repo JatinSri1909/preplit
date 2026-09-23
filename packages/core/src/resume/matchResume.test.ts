@@ -80,7 +80,7 @@ describe('matchResumeToRequirements', () => {
     const llm = new MockLlmClient([{ results: 'not-an-array' }]);
 
     await expect(matchResumeToRequirements(requirements, 'Some resume text.', llm)).rejects.toThrow(
-      /matchResumeToRequirements: LLM response failed schema validation/,
+      /did not match the required shape/,
     );
   });
 });

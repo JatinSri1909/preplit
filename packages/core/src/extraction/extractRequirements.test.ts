@@ -34,7 +34,7 @@ describe('extractRequirements', () => {
 
   it('throws a clear error when the model response fails schema validation', async () => {
     const llm = new MockLlmClient([{ title: 'X' /* missing required fields */ }]);
-    await expect(extractRequirements('short jd', llm)).rejects.toThrow(/schema validation/);
+    await expect(extractRequirements('short jd', llm)).rejects.toThrow(/did not match the required shape/);
   });
 
   it('produces a short, honest requirements list for a thin JD rather than inventing entries', async () => {

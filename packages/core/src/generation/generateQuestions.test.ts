@@ -60,7 +60,7 @@ describe('generateQuestionsForRequirement', () => {
   it('throws a clear error on a schema-invalid response', async () => {
     const llm = new MockLlmClient([{ questions: [] }]); // violates min(1)
     await expect(generateQuestionsForRequirement(technicalMust, llm, { roleTitle: 'Engineer' })).rejects.toThrow(
-      /schema validation/,
+      /did not match the required shape/,
     );
   });
 });

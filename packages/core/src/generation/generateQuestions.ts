@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LlmClient, wrapUntrustedContent } from '@prep-kit/llm';
 import { Question, QuestionCategory, Requirement } from '../types/kit.js';
+import { zodValidate } from '../validation/zodValidate.js';
 
 /**
  * Question generation. Per the brief: "a requirement like five years of
@@ -77,19 +78,18 @@ async function generateForCategory(
     .join('\n\n');
 
   const system = buildSystemPrompt(category);
-  const raw = await llm.generateJson<GenerationResponse>({
+  // A schema mismatch (e.g. difficulty returned as "2" instead of 2) gets
+  // generateJson's self-correction retry via `validate`, rather than
+  // throwing immediately and failing this requirement's whole question set.
+  const parsed = await llm.generateJson<GenerationResponse>({
     system,
     user: contextBlock,
     estimatedInputTokens: Math.ceil((system.length + contextBlock.length) / 4),
     maxOutputTokens: 1024,
+    validate: zodValidate(GenerationResponseSchema),
   });
 
-  const parsed = GenerationResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error(`generateForCategory: LLM response failed schema validation: ${parsed.error.message}`);
-  }
-
-  return parsed.data.questions.map((q) => ({
+  return parsed.questions.map((q) => ({
     requirement_ids: [requirement.id],
     category,
     prompt: q.prompt,

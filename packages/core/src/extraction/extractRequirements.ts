@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LlmClient, wrapUntrustedContent } from '@prep-kit/llm';
 import { Requirement, RequirementKind, RequirementPriority, RoleSection } from '../types/kit.js';
+import { zodValidate } from '../validation/zodValidate.js';
 
 /**
  * LLM call #1: extract role metadata + requirements from the pasted JD.
@@ -61,23 +62,19 @@ export async function extractRequirements(
 ): Promise<Pick<RoleSection, 'title' | 'seniority' | 'responsibilities' | 'requirements'>> {
   const user = wrapUntrustedContent('job_description', jd);
 
-  const raw = await llm.generateJson<ExtractionResponse>({
+  const parsed = await llm.generateJson<ExtractionResponse>({
     system: SYSTEM_PROMPT,
     user,
     estimatedInputTokens: Math.ceil((SYSTEM_PROMPT.length + user.length) / 4),
     maxOutputTokens: 2048,
+    validate: zodValidate(ExtractionResponseSchema),
   });
 
-  const parsed = ExtractionResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error(`extractRequirements: LLM response failed schema validation: ${parsed.error.message}`);
-  }
-
   return {
-    title: parsed.data.title,
-    seniority: parsed.data.seniority,
-    responsibilities: parsed.data.responsibilities,
-    requirements: assignRequirementIds(parsed.data.requirements),
+    title: parsed.title,
+    seniority: parsed.seniority,
+    responsibilities: parsed.responsibilities,
+    requirements: assignRequirementIds(parsed.requirements),
   };
 }
 
