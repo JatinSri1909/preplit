@@ -3,9 +3,10 @@
 Full-Stack Engineering Assessment submission — turns a pasted job description
 + company URL into a structured, editable interview prep kit.
 
-> **Status**: feature-complete against the brief. Pipeline, API, builder UI
-> and practice mode are implemented; 89 tests pass and the full build runs
-> from a clean clone. Remaining known limitations are listed at the bottom.
+> **Status**: feature-complete against the brief, plus one optional creative
+> feature (resume match — see below). Pipeline, API, builder UI and practice
+> mode are implemented; 105 tests pass and the full build runs from a clean
+> clone. Remaining known limitations are listed at the bottom.
 
 ## Tech stack
 
@@ -17,7 +18,7 @@ Full-Stack Engineering Assessment submission — turns a pasted job description
 | Client state | TanStack Query                  | Generation is a long poll, every builder edit is an optimistic cache write that must roll back on failure, and the kit is read by sibling routes that must share one copy. Hand-rolling that is where "an edit in flight" bugs come from |
 | Language   | TypeScript throughout             | Shared types between API, CLI and (via package) the web app; zod schemas double as both request validation and the Appendix A structural contract |
 | Scraping   | Custom crawler (`cheerio` + native `fetch`) | No fixed path list — brief explicitly disallows that. See "Retrieval approach" below |
-| LLM        | **Groq** (`llama-3.3-70b-versatile` by default), via `groq-sdk` | Genuine free tier, OpenAI-compatible JSON-mode output, fast/consistent low-latency inference |
+| LLM        | **Groq**, pooled across `openai/gpt-oss-120b` / `qwen/qwen3.8-27b` / `openai/gpt-oss-20b` by default, via `groq-sdk` | Genuine free tier, OpenAI-compatible JSON-mode output, fast/consistent low-latency inference. Pooling three models multiplies the effective rate-limit budget — see "Model pool" below |
 | Search (research step) | DuckDuckGo HTML endpoint scrape | No API key available/allowed per the brief; single seam (`searchWeb.ts`) to swap providers if needed |
 
 ## Setup
@@ -128,6 +129,7 @@ packages/core/  Framework-free pipeline logic — the single source of truth,
   schedule/     deterministic day allocation (no LLM)
   validation/   Appendix A structural + cross-referential validator
   state/        Builder edit/regenerate-without-clobbering merge logic
+  resume/       optional creative feature: resume-vs-requirements matching
   pipeline.ts   wires all of the above into runPipeline()
 packages/llm/   Provider-agnostic LLM client — Groq implementation,
                 token-bucket rate limiter, backoff/retry, prompt-injection
@@ -257,6 +259,50 @@ The queue is fixed for the duration of a session rather than resorted after
 every rating. Resorting live means a card you just rated "guessed"
 reappears immediately, which reads as punishment rather than revision.
 
+## Creative feature: resume match
+
+The optional creativity requirement. Upload a PDF resume against a built
+kit and get a match score plus, for anything missing, a note on what's
+gone. The brief's suggested "weak spots report" already exists at the
+flashcard level (practice mode's confidence tracking); this goes one level
+up — a resume tells you which **requirements** you're weak on, not which
+cards, which is what you actually need to cram the night before.
+
+- **The score is arithmetic, never invented.** The model's only job is one
+  judgment call per requirement — does the resume give real, specific
+  evidence for it, and if not, why — the same "structured judgment in,
+  arithmetic in code" split the rest of the pipeline already uses
+  (`checkCoverage`'s set-diff, `buildSchedule`'s allocation). The score
+  itself (`must_matched / must_total`, rounded) is computed in code from
+  that judgment and ignores "nice" priority entirely, mirroring
+  `findUncoveredMustHaveIds` — the only other place in the app that gates
+  on priority.
+- **One LLM call**, not two. The gap note doubles as the "suggestion" the
+  brief asks for, generated as a side effect of the same matched/unmatched
+  judgment rather than a second pass over the same data.
+- **PDF only, nothing written to disk.** Pasting resume text was
+  considered and rejected — unlike a job description, nobody keeps a
+  plain-text copy of their resume lying around. `multer`'s
+  `memoryStorage()` keeps the upload as an in-memory buffer; `pdf-parse`
+  extracts text from it; the buffer is discarded once the request
+  completes and never touches disk.
+- **Only the verdict is persisted, never the resume text.** A resume
+  durably identifies a person — name, contact details — in a way nothing
+  else in this app does. The extracted text is capped and sent to the LLM,
+  then discarded; only `{ score, must_total, must_matched, results }` is
+  stored.
+- **Not part of Appendix A.** Stored as a sibling field on the kit
+  document (`resumeMatch`), exactly like `KitMeta`/`PracticeState`
+  already are, for the same reason: Appendix A is graded exactly as
+  given, so anything outside it lives beside the kit, never inside it.
+- **One resume per kit** — re-uploading replaces the previous result, the
+  same no-history treatment every other piece of app-only state already
+  gets.
+
+`packages/core/src/resume/matchResume.ts` (LLM call + scoring), `POST
+/kits/:id/resume` in `apps/api/src/routes/builderRoutes.ts` (upload +
+extraction), "Resume match" tab in the builder UI.
+
 ## Frontend notes
 
 - **Editing** is local while a field has focus and saves once, on blur, only
@@ -276,9 +322,36 @@ reappears immediately, which reads as punishment rather than revision.
   majority and badging them would drown the real signal. Regeneration is
   offered per category only — there is no "regenerate everything" button,
   because that is the button that loses work.
-- **Generation progress** names the pipeline steps instead of faking a
-  percentage. Duration depends on the posting and the company site, so any
-  bar would be invented, and one that stalls at 80% is worse than honesty.
+- **Generation progress reflects real backend state, not a canned
+  animation.** `runPipeline` fires an `onStep` callback right before each
+  of its six externally-visible stages; the API writes that step onto the
+  kit document as it happens, and the UI polls and renders the **true**
+  current step (done/current/pending), not a fixed-timing CSS sequence
+  that would look identical whether the pipeline is genuinely stepping
+  through work or running as a single opaque call. It still never fakes a
+  percentage — duration depends on the posting and the company site, so
+  any bar would be invented, and one that stalls at 80% is worse than
+  honesty.
+- **Every kit is clickable from the dashboard, whatever its status.** A
+  `generating` kit opens its own live progress view; a `failed` one opens
+  a retry screen with a plain-language reason and a "Try again" that
+  genuinely restarts the pipeline (resubmits the stored input, rather than
+  re-polling a document that will never move off "failed"). Only `ready`
+  kits used to link through — a failed generation was, until caught during
+  testing, an invisible dead end on the dashboard.
+- **Failure messages are written for the user, not for a stack trace.** A
+  malformed LLM response (the free-tier Groq models occasionally return a
+  `difficulty` field as a string instead of the required literal `1 | 2 |
+  3`, or truncate JSON before it's complete) is logged in full server-side
+  and reported to the client as a plain sentence — "the AI model returned
+  something unexpected, try again" — never the raw Zod validation dump.
+  Caught live during testing, where the unsanitized version was showing a
+  multi-paragraph JSON error to the user.
+- **An already-signed-in visitor never sees the sign-in form.** `/login`
+  and `/register` redirect straight to the dashboard if `useAuth()`
+  already resolves a user — otherwise the header (correctly reporting
+  "signed in") and the page body (asking you to sign in) contradicted each
+  other.
 - **Typography** carries one rule: kit content is set in a serif, app
   chrome in a sans, so you can see at a glance what the model wrote versus
   what the application is offering. Both are system stacks — no webfont
@@ -293,17 +366,26 @@ reappears immediately, which reads as punishment rather than revision.
 | No discoverable hiring page | `hiringPage` stays `null`; generation proceeds without hiring-process bias |
 | Thin JD | Extraction returns a short requirements list — never padded to look thorough |
 | No public interview discussion | `findInterviewDiscussion` returns `null` |
-| LLM returns invalid JSON | One self-correction retry (asks the model to fix its own output), then a structured `LlmInvalidJsonError` |
+| LLM returns text that isn't JSON at all | One self-correction retry inside `generateJson` (asks the model to fix its own output), then a structured `LlmInvalidJsonError` |
+| LLM returns valid JSON in the wrong shape (e.g. `difficulty` as a string instead of the literal `1 \| 2 \| 3`) | Caught by `.safeParse()` at the extraction/generation call site; the raw Zod dump is logged server-side only and the user sees one plain sentence — see "Frontend notes" |
 | LLM rate-limited | Token-bucket rate limiter self-throttles *before* hitting the limit; exponential backoff + jitter on an actual 429 |
 | Duplicate submission | Fingerprinted per user on (normalised company_url, normalised jd). A resubmission returns the existing kit with `duplicate_of_existing_kit: true` and the UI says so, rather than spending a second pipeline run. `days` is excluded from the fingerprint — the same posting with a different runway is the same research, and the schedule rebuilds without regenerating anything. A previously *failed* kit is excluded, so resubmitting after a failure genuinely retries |
+| Resume upload: wrong file type, over 4MB, or an unparseable/scanned PDF | Rejected before it reaches the model, with a plain-language reason per case (`INVALID_FILE_TYPE`, `FILE_TOO_LARGE`, `RESUME_UNREADABLE`) — never a raw multer/pdf-parse exception |
+| Resume upload: posting has zero must-have requirements | `score` is `null`, not `0` or `NaN` — the UI reports "nothing to score" rather than a misleading percentage |
 | Generation orphaned by a restart | A kit "generating" for over 10 minutes is reported as failed on read, rather than leaving the interface polling a spinner forever |
 | An edit that would break Appendix A | Rejected with 422 and not saved. Deleting a scheduled question also tidies the schedule, since `validateKit` rejects a dangling `question_ids` reference |
 | 1-day / 60-day schedule | `buildSchedule` handles any `daysAvailable` — trailing/empty days get a "Review / practice" focus rather than breaking |
 
 ## Known limitations
 
-- The LLM-calling modules are unit-tested against a **mock** client. They
-  have not yet been exercised against the live Groq API end to end.
+- The LLM-calling modules are unit-tested against a **mock** client, and
+  separately exercised live against the real Groq API during development.
+  The free-tier models are occasionally flaky in exactly the ways this
+  matters: malformed structured output (wrong field type, truncated JSON)
+  a few times per dozen calls, observed directly while testing. Nothing
+  auto-retries a malformed generation call today — a failure surfaces
+  cleanly (see "Frontend notes") and the user's next action is a genuine
+  retry, not a silent retry hidden from them.
 - Ownership failures return **404, not 403**. A 403 confirms to a signed-in
   stranger that a kit id exists and belongs to someone; nothing a
   legitimate caller can do differs between the two answers.
@@ -313,6 +395,11 @@ reappears immediately, which reads as punishment rather than revision.
 - Regenerating a question category reuses the stored company brief as
   context rather than re-crawling. Cheaper and faster, but it will not pick
   up a hiring page that appeared since the kit was first built.
+- Resume match accepts PDF only (no DOCX), and keeps one resume per kit —
+  re-uploading replaces the previous result outright rather than keeping
+  history. Since the extracted text is discarded once scored (a deliberate
+  privacy choice, not an oversight — see "Creative feature" above),
+  re-scoring after a kit's requirements change means uploading again.
 
 ## Testing
 
@@ -320,10 +407,16 @@ reappears immediately, which reads as punishment rather than revision.
 npm test
 ```
 
-89 tests across `packages/core` and `apps/api`, including a full pipeline
-integration test that runs a **real** crawl (link ranking, robots.txt,
-anchor-text scoring) against an in-process local HTTP fixture server, with
-only the LLM calls mocked — the same code path the batch CLI uses.
+105 tests across `packages/core`, `packages/llm` and `apps/api`, including
+a full pipeline integration test that runs a **real** crawl (link ranking,
+robots.txt, anchor-text scoring) against an in-process local HTTP fixture
+server, with only the LLM calls mocked — the same code path the batch CLI
+uses. `matchResume.test.ts` covers the resume-match feature's scoring
+logic against a scripted mock LLM: a normal match/no-match mix, a
+requirement the model silently omits from its response (must default to
+unmatched, never dropped), a hallucinated extra requirement id (must be
+filtered out), and zero must-have requirements (`score` must be `null`,
+not `0` or `NaN`).
 
 ## Build ordering (why the scripts look like this)
 
