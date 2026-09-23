@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { PDFParse } from 'pdf-parse';
+import { extractText, getDocumentProxy } from 'unpdf';
 import { z } from 'zod';
 import {
   buildSchedule,
@@ -503,9 +503,9 @@ builderRouter.post(
     }
 
     let text: string;
-    const parser = new PDFParse({ data: req.file.buffer });
     try {
-      text = (await parser.getText()).text.trim();
+      const pdf = await getDocumentProxy(new Uint8Array(req.file.buffer));
+      text = (await extractText(pdf, { mergePages: true })).text.trim();
     } catch {
       res.status(400).json({
         error: {
@@ -514,8 +514,6 @@ builderRouter.post(
         },
       });
       return;
-    } finally {
-      await parser.destroy();
     }
 
     if (text.length < 50) {

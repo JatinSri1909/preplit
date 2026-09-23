@@ -20,7 +20,7 @@
     "express": "^4.21.0",
     "mongoose": "^8.7.0",
     "multer": "^2.4.0",
-    "pdf-parse": "^2.4.5",
+    "unpdf": "^1.8.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

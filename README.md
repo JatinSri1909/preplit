@@ -283,9 +283,15 @@ cards, which is what you actually need to cram the night before.
 - **PDF only, nothing written to disk.** Pasting resume text was
   considered and rejected — unlike a job description, nobody keeps a
   plain-text copy of their resume lying around. `multer`'s
-  `memoryStorage()` keeps the upload as an in-memory buffer; `pdf-parse`
+  `memoryStorage()` keeps the upload as an in-memory buffer; `unpdf`
   extracts text from it; the buffer is discarded once the request
-  completes and never touches disk.
+  completes and never touches disk. (Started as `pdf-parse`, which pulls
+  in `pdfjs-dist`'s canvas-rendering path and its native `@napi-rs/canvas`
+  dependency even for plain text extraction — that native dependency
+  didn't bundle correctly on Vercel and crashed the whole function on
+  import with `DOMMatrix is not defined`, not just this route. `unpdf`
+  ships a serverless-optimized PDF.js build with no native dependency for
+  text extraction, which is all this feature ever needed.)
 - **Only the verdict is persisted, never the resume text.** A resume
   durably identifies a person — name, contact details — in a way nothing
   else in this app does. The extracted text is capped and sent to the LLM,
