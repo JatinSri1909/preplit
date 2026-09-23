@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import type { Kit, KitMeta, PracticeState } from '@prep-kit/core';
+import { PIPELINE_STEPS, type Kit, type KitMeta, type PipelineStep, type PracticeState } from '@prep-kit/core';
 
 export type KitStatus = 'generating' | 'ready' | 'failed';
 
@@ -7,6 +7,11 @@ export interface KitDocumentData extends Document {
   userId: Types.ObjectId;
   status: KitStatus;
   error?: string;
+  // Which of PIPELINE_STEPS the background job is currently on — null
+  // before the first step starts and once generation finishes. This is
+  // what makes the "Building your kit" list in the UI a genuine progress
+  // report instead of a canned animation; see kitGeneration.ts's onStep.
+  step: PipelineStep | null;
   // Appendix A shape, validated with validateKit() before every save —
   // NOT re-validated at the Mongoose schema level, since the schema
   // itself must not silently coerce/strip fields that structural grading
@@ -35,6 +40,7 @@ const kitDocumentSchema = new Schema<KitDocumentData>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     status: { type: String, enum: ['generating', 'ready', 'failed'], default: 'generating' },
     error: { type: String },
+    step: { type: String, enum: PIPELINE_STEPS, default: null },
     kit: { type: Schema.Types.Mixed, default: null },
     meta: { type: Schema.Types.Mixed, default: null },
     practice: { type: Schema.Types.Mixed, default: () => ({}) },

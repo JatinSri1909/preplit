@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { PIPELINE_STEPS, PIPELINE_STEP_LABELS, type PipelineStep } from '@prep-kit/core';
 import { useKit } from '../lib/useKit';
 import { BriefSection, RoleSection, FlashcardsSection, ScheduleSection } from './KitSections';
 import { QuestionsSection } from './QuestionsSection';
@@ -63,7 +64,7 @@ export function KitBuilder({ kitId }: { kitId: string }) {
 
   if (!data) return null;
 
-  if (data.status === 'generating') return <GeneratingState />;
+  if (data.status === 'generating') return <GeneratingState step={data.step} />;
 
   if (data.status === 'failed' || !data.kit || !data.meta) {
     return (
@@ -163,13 +164,18 @@ export function KitBuilder({ kitId }: { kitId: string }) {
  * Generation runs for a minute or more, so this names the steps rather
  * than showing an unexplained spinner.
  *
- * It deliberately does not fake a progress bar. The pipeline's duration
- * depends on how many requirements the posting has and how hard the
- * company site is to crawl, so any percentage would be invented — and a
- * progress bar that stalls at 80% is worse than an honest list of what
- * the system is doing.
+ * `step` is the pipeline's own real progress (polled from the server via
+ * onStep in kitGeneration.ts) — not a canned animation. A step is done
+ * once the server has moved past it, in progress while it's the current
+ * one, and not-yet-started otherwise. It deliberately does not fake a
+ * percentage: the pipeline's duration depends on how many requirements the
+ * posting has and how hard the company site is to crawl, so any progress
+ * bar would be invented — an honest, live list of what the system is
+ * actually doing is more useful than a bar that stalls at 80%.
  */
-function GeneratingState() {
+function GeneratingState({ step }: { step: PipelineStep | null }) {
+  const currentIndex = step ? PIPELINE_STEPS.indexOf(step) : 0;
+
   return (
     <div className="mx-auto max-w-read px-4 py-16 sm:px-6">
       <h1 className="font-read text-2xl">Building your kit</h1>
@@ -178,27 +184,28 @@ function GeneratingState() {
         kit appears on your dashboard when it is done.
       </p>
 
-      <ol className="mt-6 space-y-2.5 text-sm text-muted">
-        {[
-          'Reading the job description for its requirements',
-          'Crawling the company site for what they do and how they hire',
-          'Looking for public accounts of their interview process',
-          'Writing questions for each requirement',
-          'Checking every must-have has a question, and filling the gaps',
-          'Laying the material out across your days',
-        ].map((step, i) => (
-          <li
-            key={step}
-            className="flex animate-fade-in-up gap-2.5"
-            style={{ animationDelay: `${i * 120}ms` }}
-          >
-            <span aria-hidden className="relative mt-1.5 flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/50" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-            </span>
-            {step}
-          </li>
-        ))}
+      <ol className="mt-6 space-y-2.5 text-sm">
+        {PIPELINE_STEPS.map((s, i) => {
+          const status = i < currentIndex ? 'done' : i === currentIndex ? 'current' : 'pending';
+          return (
+            <li
+              key={s}
+              className={`flex gap-2.5 transition-opacity ${status === 'pending' ? 'text-muted/50' : 'text-muted'}`}
+            >
+              <span aria-hidden className="relative mt-1.5 flex h-2 w-2 shrink-0">
+                {status === 'current' && (
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/50" />
+                )}
+                <span
+                  className={`relative inline-flex h-2 w-2 rounded-full ${
+                    status === 'pending' ? 'bg-muted/40' : 'bg-accent'
+                  }`}
+                />
+              </span>
+              {status === 'done' ? <span className="line-through decoration-muted/50">{PIPELINE_STEP_LABELS[s]}</span> : PIPELINE_STEP_LABELS[s]}
+            </li>
+          );
+        })}
       </ol>
 
       <p className="mt-6 flex items-center gap-2 text-sm text-muted">

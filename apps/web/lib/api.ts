@@ -1,4 +1,4 @@
-import type { Kit, KitMeta, PracticeState, PracticeProgress, Flashcard } from '@prep-kit/core';
+import type { Kit, KitMeta, PipelineStep, PracticeState, PracticeProgress, Flashcard } from '@prep-kit/core';
 
 /**
  * The only place in the web app that knows the API exists.
@@ -100,6 +100,8 @@ export interface KitSummary {
 export interface KitRecord {
   id: string;
   status: KitStatus;
+  /** Which pipeline step is currently running; only meaningful while status is 'generating'. */
+  step: PipelineStep | null;
   error: string | null;
   kit: Kit | null;
   meta: KitMeta | null;

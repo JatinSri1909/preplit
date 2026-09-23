@@ -19,6 +19,33 @@ export interface PipelineInput {
   days: number;
 }
 
+/**
+ * The steps a caller can observe from the outside, in the order
+ * runPipeline actually executes them. Kept to the granularity a human
+ * watching a progress list cares about — several internal steps (crawl +
+ * company-brief summarisation, schedule build + final validation) are
+ * reported under one entry because they're inseparable in wall-clock time.
+ */
+export const PIPELINE_STEPS = [
+  'extracting_requirements',
+  'crawling_company_site',
+  'researching_interview_process',
+  'generating_questions',
+  'checking_coverage',
+  'building_schedule',
+] as const;
+
+export type PipelineStep = (typeof PIPELINE_STEPS)[number];
+
+export const PIPELINE_STEP_LABELS: Record<PipelineStep, string> = {
+  extracting_requirements: 'Reading the job description for its requirements',
+  crawling_company_site: 'Crawling the company site for what they do and how they hire',
+  researching_interview_process: 'Looking for public accounts of their interview process',
+  generating_questions: 'Writing questions for each requirement',
+  checking_coverage: 'Checking every must-have has a question, and filling the gaps',
+  building_schedule: 'Laying the material out across your days',
+};
+
 export interface PipelineOptions {
   llm: LlmClient;
   /** Max coverage-loop passes after the first draft. Brief Section 4: decide and justify. */
@@ -27,6 +54,13 @@ export interface PipelineOptions {
   /** Injection seams for tests — default to the real implementations. */
   crawl?: typeof crawlSite;
   research?: typeof findInterviewDiscussion;
+  /**
+   * Fired synchronously right before each step below starts, so a caller
+   * (the API's background job) can persist real progress instead of
+   * guessing from elapsed time. Never awaited — a slow subscriber must not
+   * slow down the pipeline itself.
+   */
+  onStep?: (step: PipelineStep) => void;
 }
 
 const DEFAULT_MAX_COVERAGE_PASSES = 2;
@@ -61,15 +95,18 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
     allowPrivateHosts = false,
     crawl = crawlSite,
     research = findInterviewDiscussion,
+    onStep,
   } = opts;
 
   const researchedAt = new Date().toISOString();
 
   // 1. Extraction — the only step that needs no retrieval at all (brief:
   // "Pasted text needs no retrieval at all").
+  onStep?.('extracting_requirements');
   const { title, seniority, responsibilities, requirements } = await extractRequirements(input.jd, llm);
 
   // 2. Crawl — deterministic link ranking, never a hard-coded path.
+  onStep?.('crawling_company_site');
   let crawlResult: CrawlResult;
   try {
     crawlResult = await crawl(input.companyUrl, { allowPrivateHosts });
@@ -90,6 +127,7 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
   const companyBriefSummary = companyBrief.summary;
 
   // 3. Research — best-effort, degrades to null honestly.
+  onStep?.('researching_interview_process');
   let discussion: InterviewDiscussionFinding | null = null;
   try {
     discussion = await research(companyName, llm, { allowPrivateHosts });
@@ -104,6 +142,7 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
   };
 
   // 4. First-pass generation — one call per (requirement, category).
+  onStep?.('generating_questions');
   const questions: Question[] = [];
   let idSeq = 1;
   for (const requirement of requirements) {
@@ -114,6 +153,7 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
   }
 
   // 5-6. Coverage loop — deterministic gap-finding, LLM only fills gaps.
+  onStep?.('checking_coverage');
   let passes = 1;
   for (let pass = 0; pass < maxCoveragePasses; pass++) {
     const uncovered = findUncoveredMustHaveIds(requirements, questions);
@@ -141,6 +181,7 @@ export async function runPipeline(input: PipelineInput, opts: PipelineOptions): 
     });
 
   // 7. Schedule — deterministic allocation, not a prompt.
+  onStep?.('building_schedule');
   const schedule = buildSchedule(requirements, questions, input.days);
 
   const kit: Kit = {

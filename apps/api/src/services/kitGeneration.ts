@@ -109,7 +109,14 @@ async function runInBackground(docId: string, input: KitInput): Promise<void> {
   try {
     const kit = await runPipeline(
       { jd: input.jd, companyUrl: input.company_url, days: input.days },
-      { llm: llmClient() },
+      {
+        llm: llmClient(),
+        // Fire-and-forget: a slow/failed progress write must never hold up
+        // the pipeline itself, so errors are swallowed rather than awaited.
+        onStep: (step) => {
+          void KitDocument.findByIdAndUpdate(docId, { step }).catch(() => undefined);
+        },
+      },
     );
 
     const { valid, errors } = validateKit(kit);
@@ -119,7 +126,7 @@ async function runInBackground(docId: string, input: KitInput): Promise<void> {
       kit.questions.map((q) => q.id),
       kit.flashcards.map((f) => f.id),
     );
-    await KitDocument.findByIdAndUpdate(docId, { status: 'ready', kit, meta });
+    await KitDocument.findByIdAndUpdate(docId, { status: 'ready', kit, meta, step: null });
   } catch (err) {
     // A failed run is recorded on the document, never thrown — the request
     // that started it has long since returned, so an unhandled rejection

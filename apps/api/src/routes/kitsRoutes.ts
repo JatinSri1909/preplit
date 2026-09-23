@@ -168,6 +168,7 @@ kitsRouter.get(
     res.json({
       id: doc.id,
       status: doc.status,
+      step: doc.step ?? null,
       error: doc.error ?? null,
       kit: doc.kit,
       meta: doc.meta,
