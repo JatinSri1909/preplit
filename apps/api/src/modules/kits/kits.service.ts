@@ -1,66 +1,15 @@
 import { createHash } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import { runPipeline, validateKit, initialMetaFor } from '@prep-kit/core';
-import { GroqModelPool, type LlmClient } from '@prep-kit/llm';
-import { KitDocument } from '../db/models/KitDocument.js';
+import { KitDocument } from './kits.model.js';
+import { llmClient } from './kits.helpers.js';
+import type { KitInput } from './kits.interfaces.js';
 
 /**
  * Generation orchestration, kept out of the route handlers so that both
  * the single-kit and the batch-upload endpoints go through exactly one
  * code path (and so the routes stay readable).
  */
-
-// All three are Groq's other current free chat models alongside
-// gpt-oss-120b — each gets its own 30 RPM / 8K TPM budget (see
-// console.groq.com/docs/rate-limits), so pooling them multiplies
-// available throughput instead of one model's cap being the app's
-// ceiling. Best quality first; GroqModelPool only drops to a later one
-// when the preferred one is actually busy or cooling down from a 429.
-const DEFAULT_MODEL_POOL = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'];
-
-// Cached across warm invocations (see index.ts's per-request connectDb
-// pattern for why that matters here too) so the rate limiters — and the
-// cooldown state they track per model — persist between requests
-// instead of resetting on every call.
-let cachedClient: LlmClient | undefined;
-
-export function llmClient(): LlmClient {
-  if (cachedClient) return cachedClient;
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error('GROQ_API_KEY is not set. See .env.example.');
-  const tokensPerMinute = process.env.GROQ_TPM_BUDGET ? Number(process.env.GROQ_TPM_BUDGET) : undefined;
-  const requestsPerMinute = process.env.GROQ_RPM_BUDGET ? Number(process.env.GROQ_RPM_BUDGET) : undefined;
-
-  // GROQ_MODEL_POOL (comma-separated) wins if set; a lone GROQ_MODEL
-  // still works exactly as before (a "pool" of one, no fallback
-  // possible); with neither set, default to the pool above rather than
-  // a single hardcoded model.
-  const models = process.env.GROQ_MODEL_POOL
-    ? process.env.GROQ_MODEL_POOL.split(',').map((m) => m.trim()).filter(Boolean)
-    : [process.env.GROQ_MODEL ?? DEFAULT_MODEL_POOL[0]];
-
-  cachedClient = new GroqModelPool({
-    apiKey,
-    models: models.map((model) => ({ model, tokensPerMinute, requestsPerMinute })),
-  });
-  return cachedClient;
-}
-
-/**
- * Per-model rate-limit headroom, for the `/llm-status` route — so "is the
- * pool actually helping, or is every model cooling down right now" is a
- * request away instead of a guess from the logs.
- */
-export function llmPoolStatus(): ReturnType<GroqModelPool['status']> | null {
-  const client = llmClient();
-  return client instanceof GroqModelPool ? client.status() : null;
-}
-
-export interface KitInput {
-  jd: string;
-  company_url: string;
-  days: number;
-}
 
 /**
  * Identity of a posting for one user: same person, same company, same
@@ -112,6 +61,26 @@ export async function startKitGeneration(userId: string, input: KitInput): Promi
   return doc.id;
 }
 
+/**
+ * Find an existing kit for the same posting.
+ *
+ * Brief Section 10 lists "the same description and company are submitted
+ * twice" as an edge case. Resubmitting is treated as a request for the kit
+ * the user already has, not as an error and not as a reason to spend a
+ * second pipeline run: the existing kit is returned with a flag so the
+ * interface can say so plainly. A previously *failed* kit is excluded —
+ * resubmitting after a failure is a retry, and should genuinely retry.
+ */
+export async function findDuplicate(userId: string, input: KitInput) {
+  return KitDocument.findOne({
+    userId,
+    fingerprint: fingerprint(userId, input),
+    status: { $ne: 'failed' },
+  })
+    .select('_id status')
+    .lean();
+}
+
 async function runInBackground(docId: string, input: KitInput): Promise<void> {
   try {
     const kit = await runPipeline(
@@ -150,17 +119,4 @@ async function runInBackground(docId: string, input: KitInput): Promise<void> {
         'This kit could not be generated — the AI model returned something unexpected. This is usually a temporary hiccup; try again.',
     }).catch(() => undefined);
   }
-}
-
-/**
- * A kit that has been "generating" for longer than this was almost
- * certainly orphaned by a process restart — nothing is still running that
- * will ever move it on. The GET route flips these to failed so the
- * interface shows an honest error with a retry instead of a spinner that
- * never resolves.
- */
-export const STALE_GENERATION_MS = 10 * 60 * 1000;
-
-export function isStaleGeneration(status: string, updatedAt: Date): boolean {
-  return status === 'generating' && Date.now() - updatedAt.getTime() > STALE_GENERATION_MS;
 }

@@ -1,5 +1,4 @@
 import cookieSession from 'cookie-session';
-import type { Request, Response, NextFunction } from 'express';
 
 /**
  * Minimal session handling (brief Section 1): signed, httpOnly cookies
@@ -27,20 +26,4 @@ export function sessionMiddleware() {
     sameSite: isProduction ? 'none' : 'lax',
     secure: isProduction,
   });
-}
-
-declare module 'express-serve-static-core' {
-  interface Request {
-    userId?: string;
-  }
-}
-
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const userId = req.session?.userId;
-  if (typeof userId !== 'string' || userId.length === 0) {
-    res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Sign in required.' } });
-    return;
-  }
-  req.userId = userId;
-  next();
 }

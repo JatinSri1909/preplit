@@ -1,8 +1,19 @@
 import type { Request, Response } from 'express';
 import { Error as MongooseError } from 'mongoose';
 import { validateKit } from '@prep-kit/core';
-import { KitDocument, KitDocumentData } from '../db/models/KitDocument.js';
-import { assertOwnsKit, ForbiddenError } from './ownership.js';
+import { KitDocument, type KitDocumentData } from '../kits/kits.model.js';
+import { ForbiddenError } from '../../common/errors/forbidden.error.js';
+
+/**
+ * "Users can read and modify only their own kits" (brief Section 1).
+ * Pulled out as a pure function so the ownership rule itself is unit
+ * tested independently of Mongo.
+ */
+export function assertOwnsKit(kitOwnerId: string, requestingUserId: string): void {
+  if (kitOwnerId !== requestingUserId) {
+    throw new ForbiddenError();
+  }
+}
 
 /**
  * Every mutating route needs the same four checks before it can touch a
@@ -104,4 +115,22 @@ export async function saveValidatedKit(
   doc.markModified('meta');
   doc.markModified('practice');
   return saveKitDocument(doc, res);
+}
+
+/**
+ * Every builder route returns the whole kit rather than just the item it
+ * changed. One edit can legitimately touch several places — deleting a
+ * question rewrites the schedule, regenerating a category renumbers ids —
+ * so returning a fragment would leave the client to guess at the rest and
+ * drift out of sync. The payload is a few KB; correctness is worth it.
+ */
+export function kitPayload(doc: KitDocumentData) {
+  return {
+    id: String(doc.id),
+    status: doc.status,
+    kit: doc.kit,
+    meta: doc.meta,
+    practice: doc.practice ?? {},
+    resume_match: doc.resumeMatch ?? null,
+  };
 }

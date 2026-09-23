@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
  * async handler to the error-handling middleware — an unhandled rejection
  * would otherwise crash the request silently. Wrap every async route
  * handler with this so thrown/rejected errors reach the centralized
- * error handler in index.ts.
+ * error handler in app.ts.
  */
 export function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,

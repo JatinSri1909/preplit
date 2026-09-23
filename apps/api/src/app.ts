@@ -8,18 +8,19 @@ if (existsSync(path.resolve(process.cwd(), '../../.env'))) {
 }
 import express from 'express';
 import cors from 'cors';
-import { connectDb } from './db/connect.js';
-import { sessionMiddleware, requireAuth } from './auth/session.js';
-import { authRouter } from './routes/authRoutes.js';
-import { kitsRouter } from './routes/kitsRoutes.js';
-import { llmPoolStatus } from './services/kitGeneration.js';
+import { connectDb } from './database/connect.js';
+import { sessionMiddleware } from './modules/auth/session.middleware.js';
+import { requireAuth } from './common/middleware/require-auth.js';
+import { authRouter } from './modules/auth/auth.routes.js';
+import { kitsRouter } from './modules/kits/kits.routes.js';
+import { llmPoolStatus } from './modules/kits/kits.helpers.js';
 
 const app = express();
 // Every deployment target (Vercel, Render, ...) terminates TLS at its own
 // edge/proxy and forwards to this process over plain HTTP, signalling the
 // original scheme via X-Forwarded-Proto. Without this, Express's
 // req.secure is always false behind that proxy, which makes the
-// session cookie's `secure: true` option (see auth/session.ts) silently
+// session cookie's `secure: true` option (see session.middleware.ts) silently
 // refuse to set the cookie at all in production — not a rejected cookie,
 // no Set-Cookie header sent in the first place.
 app.set('trust proxy', 1);
@@ -37,7 +38,7 @@ app.use(sessionMiddleware());
  * once at startup, before anything is listening. On Vercel there is no
  * startup phase to hang that off — each request may hit a cold function
  * instance — so every request awaits the connection instead. connectDb()
- * is idempotent (see db/connect.ts's `connected` flag), so on a warm
+ * is idempotent (see database/connect.ts's `connected` flag), so on a warm
  * instance this resolves immediately and adds no real latency.
  */
 app.use((_req, _res, next) => {
@@ -73,26 +74,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
     error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unexpected error.' },
   });
 });
-
-/**
- * On Vercel there is no process to keep alive — the platform detects this
- * module's default export and invokes it per-request on its own runtime,
- * so calling app.listen() there would bind a port nothing will ever use.
- * Everywhere else (Render, local dev, the batch CLI's fixture server)
- * this is a real long-running process, so it connects once up front and
- * exits loudly on failure rather than serving traffic against a database
- * that was never there.
- */
-if (!process.env.VERCEL) {
-  const port = Number(process.env.PORT ?? 4000);
-  connectDb()
-    .then(() => {
-      app.listen(port, () => console.log(`API listening on :${port}`));
-    })
-    .catch((err) => {
-      console.error('Failed to connect to MongoDB:', err);
-      process.exit(1);
-    });
-}
 
 export default app;

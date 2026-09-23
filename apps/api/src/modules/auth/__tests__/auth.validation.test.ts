@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RegisterSchema, LoginSchema } from './schemas.js';
+import { RegisterSchema, LoginSchema } from '../auth.validation.js';
 
 describe('RegisterSchema', () => {
   it('accepts a valid email + strong-enough password', () => {

@@ -17,7 +17,7 @@ export interface KitDocumentData extends Document {
   // Which of PIPELINE_STEPS the background job is currently on — null
   // before the first step starts and once generation finishes. This is
   // what makes the "Building your kit" list in the UI a genuine progress
-  // report instead of a canned animation; see kitGeneration.ts's onStep.
+  // report instead of a canned animation; see kits.service.ts's onStep.
   step: PipelineStep | null;
   // Appendix A shape, validated with validateKit() before every save —
   // NOT re-validated at the Mongoose schema level, since the schema
@@ -35,7 +35,7 @@ export interface KitDocumentData extends Document {
   // kit's requirements. Also outside Appendix A, never sent to the grader —
   // same reasoning as `meta`/`practice`. One resume per kit; re-uploading
   // replaces it. Only the match verdicts are kept, never the resume text
-  // itself (see matchResumeToRequirements's caller in builderRoutes.ts).
+  // itself (see matchResumeToRequirements's caller in builder.controller.ts).
   resumeMatch: ResumeMatch | null;
   // The request this kit was generated from. Stored so a section can be
   // regenerated later without asking the user to paste the description
@@ -65,7 +65,7 @@ const kitDocumentSchema = new Schema<KitDocumentData>(
   // `kit`/`meta`/`practice` are plain Mixed blobs rather than arrays, so
   // Mongoose's default versioning wouldn't otherwise catch two concurrent
   // saves clobbering each other — this makes save() reject with a
-  // VersionError instead (see loadKit.ts's saveValidatedKit).
+  // VersionError instead (see builder.service.ts's saveValidatedKit).
   { timestamps: true, optimisticConcurrency: true },
 );
 
