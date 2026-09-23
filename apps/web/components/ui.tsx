@@ -96,7 +96,15 @@ export const inputClass =
  * Validation details are listed when the server sent them, because "check
  * the company URL" is only actionable if you know which field it meant.
  */
-export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorNote({
+  error,
+  onRetry,
+  retrying,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
   if (!error) return null;
 
   const isApi = error instanceof ApiError;
@@ -118,7 +126,7 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
         </ul>
       )}
       {onRetry && (
-        <Button variant="secondary" onClick={onRetry} className="mt-3">
+        <Button variant="secondary" onClick={onRetry} loading={retrying} className="mt-3">
           Try again
         </Button>
       )}

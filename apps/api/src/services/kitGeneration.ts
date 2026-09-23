@@ -131,9 +131,16 @@ async function runInBackground(docId: string, input: KitInput): Promise<void> {
     // A failed run is recorded on the document, never thrown — the request
     // that started it has long since returned, so an unhandled rejection
     // here would take the whole API process down with it.
+    //
+    // The raw error (a Zod schema dump from a malformed LLM response, most
+    // often) is a debugging detail, not something to hand a user — it's
+    // logged here for whoever is watching the API, while the document gets
+    // a message someone can actually act on.
+    console.error(`Kit generation failed for ${docId}:`, err);
     await KitDocument.findByIdAndUpdate(docId, {
       status: 'failed',
-      error: err instanceof Error ? err.message : String(err),
+      error:
+        'This kit could not be generated — the AI model returned something unexpected. This is usually a temporary hiccup; try again.',
     }).catch(() => undefined);
   }
 }

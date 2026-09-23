@@ -95,27 +95,34 @@ function KitRow({
       className={`grid-frame flex animate-fade-in-up items-center gap-4 bg-surface p-4 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift ${statusBar}`}
     >
       <div className="min-w-0 flex-1">
-        {kit.status === 'ready' ? (
-          <Link href={`/kits/${kit.id}`} className="block">
-            <p className="truncate font-read text-lg">{kit.role ?? 'Untitled role'}</p>
-            <p className="truncate text-sm text-muted">
-              {kit.company ?? kit.company_url} · {kit.days} day{kit.days === 1 ? '' : 's'} to prepare
-            </p>
-          </Link>
-        ) : (
-          <>
-            <p className="truncate font-read text-lg text-muted">
-              {kit.company ?? kit.company_url ?? 'New kit'}
-            </p>
-            <p className="truncate text-sm text-muted">
-              {kit.status === 'generating' ? (
-                <Spinner label="Researching and generating" />
-              ) : (
-                <span className="text-gap">{kit.error ?? 'Generation failed.'}</span>
-              )}
-            </p>
-          </>
-        )}
+        {/* Every status links through — a kit still generating opens its
+            own live progress view, and a failed one opens the retry
+            screen. Only 'ready' gets the full title treatment; the other
+            two show what's actually happening instead of a role name that
+            doesn't exist yet. */}
+        <Link href={`/kits/${kit.id}`} className="block">
+          {kit.status === 'ready' ? (
+            <>
+              <p className="truncate font-read text-lg">{kit.role ?? 'Untitled role'}</p>
+              <p className="truncate text-sm text-muted">
+                {kit.company ?? kit.company_url} · {kit.days} day{kit.days === 1 ? '' : 's'} to prepare
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="truncate font-read text-lg text-muted">
+                {kit.company ?? kit.company_url ?? 'New kit'}
+              </p>
+              <p className="truncate text-sm text-muted">
+                {kit.status === 'generating' ? (
+                  <Spinner label="Researching and generating" />
+                ) : (
+                  <span className="text-gap">{kit.error ?? 'Generation failed.'}</span>
+                )}
+              </p>
+            </>
+          )}
+        </Link>
       </div>
 
       {/* An uncovered must-have is the one thing worth flagging from a

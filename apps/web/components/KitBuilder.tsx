@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PIPELINE_STEPS, PIPELINE_STEP_LABELS, type PipelineStep } from '@prep-kit/core';
+import { kits } from '../lib/api';
 import { useKit } from '../lib/useKit';
 import { BriefSection, RoleSection, FlashcardsSection, ScheduleSection } from './KitSections';
 import { QuestionsSection } from './QuestionsSection';
@@ -44,7 +46,24 @@ function SectionIcon({ id, className }: { id: SectionId; className?: string }) {
 export function KitBuilder({ kitId }: { kitId: string }) {
   const [section, setSection] = useState<SectionId>('brief');
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { data, isLoading, error, refetch } = useKit(kitId);
+
+  // A failed kit's own document never moves off "failed" — resubmitting
+  // its stored input is what genuinely retries (kitsRoutes' dedup check
+  // excludes failed kits, so this starts a fresh pipeline run rather than
+  // re-fetching the same dead end).
+  const retry = useMutation({
+    mutationFn: () => {
+      if (!data?.input) throw new Error('Nothing to retry.');
+      return kits.create(data.input);
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['kits'] });
+      router.push(`/kits/${result.id}`);
+    },
+  });
 
   if (isLoading) {
     return (
@@ -72,8 +91,10 @@ export function KitBuilder({ kitId }: { kitId: string }) {
         <h1 className="font-read text-2xl">This kit could not be built</h1>
         <ErrorNote
           error={new Error(data.error ?? 'Generation did not finish.')}
-          onRetry={() => refetch()}
+          onRetry={() => retry.mutate()}
+          retrying={retry.isPending}
         />
+        {retry.error && <ErrorNote error={retry.error} />}
         <Link href="/">
           <Button variant="secondary">Back to your kits</Button>
         </Link>
